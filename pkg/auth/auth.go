@@ -16,10 +16,10 @@ import (
 
 // Common errors
 var (
-	ErrInvalidCode       = errors.New("invalid authorization code")
-	ErrAuthFailed        = errors.New("authentication failed")
-	ErrChallengeExpired  = errors.New("challenge expired")
-	ErrTokenExpired      = errors.New("token expired")
+	ErrInvalidCode      = errors.New("invalid authorization code")
+	ErrAuthFailed       = errors.New("authentication failed")
+	ErrChallengeExpired = errors.New("challenge expired")
+	ErrTokenExpired     = errors.New("token expired")
 )
 
 // Constants for authentication

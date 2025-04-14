@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -12,101 +12,136 @@ import (
 	"github.com/epheo/anyblog/pkg/display"
 )
 
+// Command line flags
+type flags struct {
+	format    string
+	noColor   bool
+	debug     bool
+	timeout   time.Duration
+	spaceName string
+	typeName  string
+	query     string
+}
+
 const defaultTimeout = 30 * time.Second
 
 func main() {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancel()
-
-	if err := run(ctx); err != nil {
+	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-// run encapsulates the main program logic
-func run(ctx context.Context) error {
+func run() error {
+	// Parse command line flags
+	f := parseFlags()
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
+	defer cancel()
+
+	// Initialize display
+	printer := display.NewPrinter(f.format, !f.noColor)
+
+	// Initialize auth manager
+	authManager := auth.NewAuthManager("")
+
 	// Get configuration
-	config, err := auth.GetConfiguration()
+	config, err := authManager.GetConfiguration()
 	if err != nil {
-		return err
+		return fmt.Errorf("authentication failed: %w", err)
 	}
 
-	// Create API client
-	client := anytype.NewClient(config.ApiURL, config.SessionToken, config.AppKey)
+	// Create API client with options
+	client := anytype.NewClient(
+		config.ApiURL,
+		config.SessionToken,
+		config.AppKey,
+		anytype.WithDebug(f.debug),
+	)
 
 	// Get spaces
-	spacesData, err := client.GetSpaces(ctx)
+	spaces, err := client.GetSpaces(ctx)
 	if err != nil {
-		return fmt.Errorf("error getting spaces: %w", err)
+		return fmt.Errorf("failed to get spaces: %w", err)
 	}
 
-	// Parse spaces response
-	var spacesResp anytype.SpacesResponse
-	if err := json.Unmarshal(spacesData, &spacesResp); err != nil {
-		return fmt.Errorf("error parsing spaces JSON: %w", err)
+	if err := printer.PrintSpaces(spaces.Data); err != nil {
+		return fmt.Errorf("failed to display spaces: %w", err)
 	}
 
-	filters := map[string]interface{}{
-		"types": []string{"ot-67f7210ccebba02cb2576fb2"},
-		"tags":  []string{"published"},
-		"query": "frfrefrefre",
-	}
-	// Retrieve the first available space ID
-	if len(spacesResp.Data) == 0 {
-		return fmt.Errorf("no spaces available")
-	}
-	// Look for a space with a specific name (prefer "My private space" if it exists)
-	var spaceID string
-	var spaceName string
-	searchName := "epheo" // Default space to look for
-
-	for _, space := range spacesResp.Data {
-		if space.Name == searchName {
-			spaceID = space.ID
-			spaceName = space.Name
-			fmt.Printf("Found exact match for space: %s\n", space.Name)
+	// Find target space
+	var targetSpace *anytype.Space
+	for _, space := range spaces.Data {
+		if space.Name == f.spaceName {
+			targetSpace = &space
+			printer.PrintInfo("Found space: %s (%s)", space.Name, space.ID)
 			break
 		}
 	}
 
-	// If we didn't find the preferred space, use the first one
-	if spaceID == "" {
-		spaceID = spacesResp.Data[0].ID
-		fmt.Printf("Using default space: %s (%s)\n", spacesResp.Data[0].Name, spaceID)
+	// If specified space not found, use first available
+	if targetSpace == nil && len(spaces.Data) > 0 {
+		targetSpace = &spaces.Data[0]
+		printer.PrintInfo("Using default space: %s (%s)", targetSpace.Name, targetSpace.ID)
 	}
 
-	// Fetch available types
-	typesData, err := client.GetTypes(ctx, spaceID)
+	if targetSpace == nil {
+		return fmt.Errorf("no spaces available")
+	}
+
+	// Get types for the space
+	types, err := client.GetTypes(ctx, targetSpace.ID)
 	if err != nil {
-		return fmt.Errorf("error getting types: %w", err)
+		return fmt.Errorf("failed to get types: %w", err)
 	}
 
-	// Parse types response
-	var typesResp map[string]interface{}
-	if err := json.Unmarshal(typesData, &typesResp); err != nil {
-		return fmt.Errorf("error parsing types JSON: %w", err)
+	if err := printer.PrintJSON("Available Types", types); err != nil {
+		return fmt.Errorf("failed to display types: %w", err)
 	}
 
-	// Display the available types
-	display.PrettyPrintJSON("Available Types", typesData)
-
-	// Find a specific type by name (optional)
-	typeName := "Page" // Change this to the type you're looking for
-	typeDetails, err := client.GetTypeByName(ctx, spaceID, typeName)
-	if err != nil {
-		fmt.Printf("Could not find type '%s': %v\n", typeName, err)
-	} else {
-		display.PrettyPrintJSON(fmt.Sprintf("Type details for '%s'", typeName), []byte(typeDetails))
+	// Find specific type if requested
+	if f.typeName != "" {
+		typeID, err := client.GetTypeByName(ctx, targetSpace.ID, f.typeName)
+		if err != nil {
+			printer.PrintError("Could not find type '%s': %v", f.typeName, err)
+		} else {
+			printer.PrintSuccess("Found type '%s' with ID: %s", f.typeName, typeID)
+		}
 	}
 
-	objects, err := client.SearchObjectsWithFilters(ctx, spaceID, filters)
-	if err != nil {
-		return err
-	}
+	// Perform search if query provided
+	if f.query != "" {
+		searchParams := &anytype.SearchParams{
+			Query: f.query,
+			Limit: 10,
+		}
 
-	// Pretty-print the successful JSON response
-	display.PrettyPrintJSON(fmt.Sprintf("Objects from space %s", spaceName), objects)
+		results, err := client.Search(ctx, targetSpace.ID, searchParams)
+		if err != nil {
+			return fmt.Errorf("search failed: %w", err)
+		}
+
+		if err := printer.PrintObjects("Search Results", results.Items); err != nil {
+			return fmt.Errorf("failed to display search results: %w", err)
+		}
+	}
 
 	return nil
+}
+
+func parseFlags() *flags {
+	f := &flags{}
+
+	flag.StringVar(&f.format, "format", "text", "Output format (text or json)")
+	flag.BoolVar(&f.noColor, "no-color", false, "Disable colored output")
+	flag.BoolVar(&f.debug, "debug", false, "Enable debug mode")
+	flag.DurationVar(&f.timeout, "timeout", defaultTimeout, "Operation timeout")
+	flag.StringVar(&f.spaceName, "space", "", "Space name to use")
+	flag.StringVar(&f.typeName, "type", "", "Type name to look for")
+	flag.StringVar(&f.query, "query", "", "Search query")
+
+	flag.Parse()
+
+	return f
 }
