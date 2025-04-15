@@ -30,8 +30,11 @@ anyblog -debug
 # Search in a specific space
 anyblog -space "My Space" -query "search term"
 
-# Look for specific type
-anyblog -type "Page"
+# Search for objects of a specific type
+anyblog -type "Note" -query "search term"
+
+# Search in a specific space for objects of a specific type
+anyblog -space "My Space" -type "Note" -query "search term"
 
 # Set custom timeout
 anyblog -timeout 60s
@@ -47,7 +50,7 @@ anyblog -no-color
 - `-debug`: Enable debug mode to see API requests
 - `-timeout`: Operation timeout [default: 30s]
 - `-space`: Space name to use
-- `-type`: Type name to look for
+- `-type`: Type name to filter search results
 - `-query`: Search query
 
 ## Features
@@ -55,6 +58,7 @@ anyblog -no-color
 - Authentication management with automatic token refresh
 - List available spaces
 - Search for objects within spaces
+- Filter searches by object type (uses type's unique key internally)
 - Query object types
 - Pretty-printed output in text or JSON format
 - Colored terminal output

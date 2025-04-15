@@ -28,6 +28,7 @@ type Client struct {
 	appKey       string
 	httpClient   *http.Client
 	debug        bool
+	typeCache    map[string]map[string]string // spaceID -> typeKey -> typeName
 }
 
 // WithTimeout sets a custom timeout for the HTTP client
@@ -52,6 +53,7 @@ func NewClient(apiURL, sessionToken, appKey string, opts ...ClientOption) *Clien
 		appKey:       appKey,
 		httpClient:   &http.Client{Timeout: httpTimeout},
 		debug:        false,
+		typeCache:    make(map[string]map[string]string),
 	}
 
 	// Apply options
@@ -153,4 +155,36 @@ func (c *Client) printCurlRequest(method, url string, headers http.Header, body 
 	}
 
 	fmt.Printf("\nDebug curl command:\n%s\n", sb.String())
+}
+
+// GetTypeName returns the friendly name for a type key, using cache if available
+func (c *Client) GetTypeName(ctx context.Context, spaceID, typeKey string) string {
+	// Check cache first
+	if cache, ok := c.typeCache[spaceID]; ok {
+		if name, ok := cache[typeKey]; ok {
+			return name
+		}
+	}
+
+	// Initialize cache for this space if needed
+	if _, ok := c.typeCache[spaceID]; !ok {
+		c.typeCache[spaceID] = make(map[string]string)
+	}
+
+	// Fetch all types and update cache
+	types, err := c.GetTypes(ctx, spaceID)
+	if err != nil {
+		return typeKey // Return original key if error
+	}
+
+	// Update cache with all types
+	for _, t := range types.Data {
+		c.typeCache[spaceID][t.UniqueKey] = t.Name
+	}
+
+	// Return cached value or original key if not found
+	if name, ok := c.typeCache[spaceID][typeKey]; ok {
+		return name
+	}
+	return typeKey
 }

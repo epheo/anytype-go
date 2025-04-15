@@ -16,12 +16,50 @@ const (
 	defaultSearchOffset = 0
 )
 
+// Custom error types for better error handling
+var (
+	ErrEmptyResponse   = fmt.Errorf("empty response from API")
+	ErrInvalidResponse = fmt.Errorf("invalid response format")
+	ErrMissingRequired = fmt.Errorf("missing required parameter")
+)
+
+// Error wraps API errors with additional context
+type Error struct {
+	StatusCode int
+	Message    string
+	Path       string
+	Err        error
+}
+
+func (e *Error) Error() string {
+	if e.StatusCode != 0 {
+		return fmt.Sprintf("API error: %s (status %d) - %s", e.Path, e.StatusCode, e.Message)
+	}
+	return fmt.Sprintf("API error: %s - %s", e.Path, e.Message)
+}
+
+func (e *Error) Unwrap() error {
+	return e.Err
+}
+
+// wrapError creates a new Error with context
+func wrapError(path string, statusCode int, message string, err error) *Error {
+	return &Error{
+		StatusCode: statusCode,
+		Message:    message,
+		Path:       path,
+		Err:        err,
+	}
+}
+
 // SearchRequestBody represents the structure of a search request
 type SearchRequestBody struct {
 	SpaceID string      `json:"spaceId"`
 	Query   string      `json:"query"`
 	Types   []string    `json:"types,omitempty"`
 	Tags    []string    `json:"tags,omitempty"`
+	Filter  string      `json:"filter,omitempty"`
+	Sort    string      `json:"sort,omitempty"`
 	Limit   int         `json:"limit"`
 	Offset  int         `json:"offset"`
 	Custom  interface{} `json:"custom,omitempty"`
@@ -50,6 +88,23 @@ func (c *Client) GetSpaces(ctx context.Context) (*SpacesResponse, error) {
 	var response SpacesResponse
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse spaces response: %w", err)
+	}
+
+	// Fetch members for each space
+	for i := range response.Data {
+		if c.debug {
+			log.Printf("Debug: Fetching members for space %s (%s)", response.Data[i].Name, response.Data[i].ID)
+		}
+
+		members, err := c.GetMembers(ctx, response.Data[i].ID)
+		if err != nil {
+			if c.debug {
+				log.Printf("Warning: failed to get members for space %s: %v", response.Data[i].ID, err)
+			}
+			continue
+		}
+
+		response.Data[i].Members = members.Data
 	}
 
 	return &response, nil
@@ -121,32 +176,69 @@ func (c *Client) GetTypeByName(ctx context.Context, spaceID, typeName string) (s
 // Search performs a search in a space with the given parameters
 func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParams) (*SearchResponse, error) {
 	if spaceID == "" {
-		return nil, ErrInvalidSpaceID
+		return nil, wrapError("/search", 0, "space ID is required", ErrMissingRequired)
 	}
 	if params == nil {
 		params = NewSearchParams()
 	}
 	if err := params.Validate(); err != nil {
-		return nil, err
+		return nil, wrapError("/search", 0, "invalid search parameters", err)
 	}
 
 	path := fmt.Sprintf("/v1/spaces/%s/search", spaceID)
-	body, err := json.Marshal(params)
+
+	// Create search request body
+	requestBody := SearchRequestBody{
+		SpaceID: spaceID,
+		Query:   params.Query,
+		Types:   params.Types,
+		Limit:   params.Limit,
+		Offset:  params.Offset,
+	}
+
+	// Add tags filter using relations if tags are specified
+	if len(params.Tags) > 0 {
+		tags := make([]string, len(params.Tags))
+		for i, tag := range params.Tags {
+			tags[i] = fmt.Sprintf(`"%s"`, tag)
+		}
+		requestBody.Filter = fmt.Sprintf(`{"relations":{"tags":{"$in":[%s]}}}`,
+			strings.Join(tags, ","))
+	}
+
+	body, err := json.Marshal(requestBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal search params: %w", err)
+		return nil, wrapError("/search", 0, "failed to marshal search params", err)
+	}
+
+	if c.debug {
+		log.Printf("Debug: Search request body: %s", string(body))
 	}
 
 	data, err := c.makeRequest(ctx, http.MethodPost, path, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to perform search: %w", err)
+		return nil, wrapError(path, 0, "failed to perform search", err)
+	}
+
+	if c.debug {
+		log.Printf("Debug: Raw search response: %s", string(data))
 	}
 
 	var response SearchResponse
 	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse search response: %w", err)
+		return nil, wrapError(path, 0, "failed to parse search response", err)
 	}
 
 	return &response, nil
+}
+
+// quoteStrings wraps each string in quotes for JSON
+func quoteStrings(strs []string) []string {
+	quoted := make([]string, len(strs))
+	for i, s := range strs {
+		quoted[i] = fmt.Sprintf("%q", s)
+	}
+	return quoted
 }
 
 // GetObject retrieves a specific object by ID
@@ -219,6 +311,30 @@ func (c *Client) DeleteObject(ctx context.Context, spaceID, objectID string) err
 	}
 
 	return nil
+}
+
+// GetMembers retrieves members of a space
+func (c *Client) GetMembers(ctx context.Context, spaceID string) (*MembersResponse, error) {
+	if spaceID == "" {
+		return nil, ErrInvalidSpaceID
+	}
+
+	path := fmt.Sprintf("/v1/spaces/%s/members", spaceID)
+	data, err := c.makeRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get members for space %s: %w", spaceID, err)
+	}
+
+	if c.debug {
+		log.Printf("Debug: Raw members response: %s", string(data))
+	}
+
+	var response MembersResponse
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, fmt.Errorf("failed to parse members response: %w", err)
+	}
+
+	return &response, nil
 }
 
 // PrintCurlRequest prints a curl command equivalent to the HTTP request for debugging
