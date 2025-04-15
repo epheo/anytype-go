@@ -18,6 +18,7 @@ type flags struct {
 	format    string
 	noColor   bool
 	debug     bool
+	logLevel  string
 	timeout   time.Duration
 	spaceName string
 	typeName  string
@@ -38,6 +39,14 @@ func main() {
 func setupClient(f *flags) (*anytype.Client, display.Printer, error) {
 	// Initialize display
 	printer := display.NewPrinter(f.format, !f.noColor, f.debug)
+
+	// Set log level (debug flag overrides loglevel flag)
+	if f.debug {
+		printer.SetLogLevel(display.LogLevelDebug)
+	} else {
+		level := display.ParseLogLevel(f.logLevel)
+		printer.SetLogLevel(level)
+	}
 
 	// Initialize auth manager
 	authManager := auth.NewAuthManager("")
@@ -175,6 +184,7 @@ func parseFlags() *flags {
 	flag.StringVar(&f.format, "format", "text", "Output format (text or json)")
 	flag.BoolVar(&f.noColor, "no-color", false, "Disable colored output")
 	flag.BoolVar(&f.debug, "debug", false, "Enable debug mode")
+	flag.StringVar(&f.logLevel, "loglevel", "error", "Log level (error, info, debug)")
 	flag.DurationVar(&f.timeout, "timeout", defaultTimeout, "Operation timeout")
 	flag.StringVar(&f.spaceName, "space", "", "Space name to use")
 	flag.StringVar(&f.typeName, "type", "", "Type name to look for")

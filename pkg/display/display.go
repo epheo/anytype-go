@@ -13,6 +13,7 @@ const (
 	colorRed   = "\033[31m"
 	colorGreen = "\033[32m"
 	colorBlue  = "\033[34m"
+	colorCyan  = "\033[36m"
 
 	// Maximum lengths for truncation
 	maxMembersLength = 50

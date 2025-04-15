@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -92,14 +91,14 @@ func (c *Client) GetSpaces(ctx context.Context) (*SpacesResponse, error) {
 
 	// Fetch members for each space
 	for i := range response.Data {
-		if c.debug {
-			log.Printf("Debug: Fetching members for space %s (%s)", response.Data[i].Name, response.Data[i].ID)
+		if c.debug && c.logger != nil {
+			c.logger.Debug("Fetching members for space %s (%s)", response.Data[i].Name, response.Data[i].ID)
 		}
 
 		members, err := c.GetMembers(ctx, response.Data[i].ID)
 		if err != nil {
-			if c.debug {
-				log.Printf("Warning: failed to get members for space %s: %v", response.Data[i].ID, err)
+			if c.debug && c.logger != nil {
+				c.logger.Debug("Warning: failed to get members for space %s: %v", response.Data[i].ID, err)
 			}
 			continue
 		}
@@ -211,8 +210,8 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 		return nil, wrapError("/search", 0, "failed to marshal search params", err)
 	}
 
-	if c.debug {
-		log.Printf("Debug: Search request body: %s", string(body))
+	if c.debug && c.logger != nil {
+		c.logger.Debug("Search request body: %s", string(body))
 	}
 
 	data, err := c.makeRequest(ctx, http.MethodPost, path, bytes.NewBuffer(body))
@@ -220,8 +219,8 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 		return nil, wrapError(path, 0, "failed to perform search", err)
 	}
 
-	if c.debug {
-		log.Printf("Debug: Raw search response: %s", string(data))
+	if c.debug && c.logger != nil {
+		c.logger.Debug("Raw search response: %s", string(data))
 	}
 
 	var response SearchResponse
@@ -325,8 +324,8 @@ func (c *Client) GetMembers(ctx context.Context, spaceID string) (*MembersRespon
 		return nil, fmt.Errorf("failed to get members for space %s: %w", spaceID, err)
 	}
 
-	if c.debug {
-		log.Printf("Debug: Raw members response: %s", string(data))
+	if c.debug && c.logger != nil {
+		c.logger.Debug("Raw members response: %s", string(data))
 	}
 
 	var response MembersResponse
@@ -335,28 +334,4 @@ func (c *Client) GetMembers(ctx context.Context, spaceID string) (*MembersRespon
 	}
 
 	return &response, nil
-}
-
-// PrintCurlRequest prints a curl command equivalent to the HTTP request for debugging
-func (c *Client) PrintCurlRequest(method, url string, headers map[string]string, body []byte) {
-	var sb strings.Builder
-
-	sb.WriteString(fmt.Sprintf("curl -X %s \\\n  '%s'", method, url))
-
-	// Add headers
-	for key, value := range headers {
-		sb.WriteString(fmt.Sprintf(" \\\n  -H '%s: %s'", key, value))
-	}
-
-	// Add body with proper JSON formatting if possible
-	if len(body) > 0 {
-		var prettyJSON bytes.Buffer
-		if err := json.Indent(&prettyJSON, body, "  ", "  "); err == nil {
-			sb.WriteString(fmt.Sprintf(" \\\n  -d '%s'", prettyJSON.String()))
-		} else {
-			sb.WriteString(fmt.Sprintf(" \\\n  -d '%s'", string(body)))
-		}
-	}
-
-	log.Printf("Debug curl command:\n%s", sb.String())
 }

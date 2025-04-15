@@ -20,21 +20,37 @@ type printer struct {
 	format    string
 	useColors bool
 	debug     bool
+	logLevel  LogLevel
 }
 
 // NewPrinter creates a new Printer instance
-func NewPrinter(format string, useColors bool, debug bool) Printer {
+func NewPrinter(format string, useColors bool, debug bool) *printer {
+	logLevel := LogLevelInfo
+	if debug {
+		logLevel = LogLevelDebug
+	}
 	return &printer{
 		writer:    os.Stdout,
 		format:    format,
 		useColors: useColors,
 		debug:     debug,
+		logLevel:  logLevel,
 	}
 }
 
 // SetWriter changes the output writer
 func (p *printer) SetWriter(w io.Writer) {
 	p.writer = w
+}
+
+// SetLogLevel sets the current log level
+func (p *printer) SetLogLevel(level LogLevel) {
+	p.logLevel = level
+}
+
+// GetLogLevel returns the current log level
+func (p *printer) GetLogLevel() LogLevel {
+	return p.logLevel
 }
 
 // PrintJSON formats and prints JSON data
@@ -193,7 +209,7 @@ func (p *printer) PrintObjects(label string, objects []anytype.Object, client *a
 	return nil
 }
 
-// PrintError prints an error message
+// PrintError prints an error message (always enabled)
 func (p *printer) PrintError(format string, args ...interface{}) {
 	prefix := "Error: "
 	if p.useColors {
@@ -202,20 +218,35 @@ func (p *printer) PrintError(format string, args ...interface{}) {
 	fmt.Fprintf(p.writer, prefix+format+"\n", args...)
 }
 
-// PrintSuccess prints a success message
+// PrintSuccess prints a success message if info logging is enabled
 func (p *printer) PrintSuccess(format string, args ...interface{}) {
-	prefix := "Success: "
-	if p.useColors {
-		prefix = colorGreen + "Success:" + colorReset + " "
+	if p.logLevel >= LogLevelInfo {
+		prefix := "Success: "
+		if p.useColors {
+			prefix = colorGreen + "Success:" + colorReset + " "
+		}
+		fmt.Fprintf(p.writer, prefix+format+"\n", args...)
 	}
-	fmt.Fprintf(p.writer, prefix+format+"\n", args...)
 }
 
-// PrintInfo prints an informational message
+// PrintInfo prints an informational message if info logging is enabled
 func (p *printer) PrintInfo(format string, args ...interface{}) {
-	prefix := "Info: "
-	if p.useColors {
-		prefix = colorBlue + "Info:" + colorReset + " "
+	if p.logLevel >= LogLevelInfo {
+		prefix := "Info: "
+		if p.useColors {
+			prefix = colorBlue + "Info:" + colorReset + " "
+		}
+		fmt.Fprintf(p.writer, prefix+format+"\n", args...)
 	}
-	fmt.Fprintf(p.writer, prefix+format+"\n", args...)
+}
+
+// PrintDebug prints a debug message if debug logging is enabled
+func (p *printer) PrintDebug(format string, args ...interface{}) {
+	if p.logLevel >= LogLevelDebug {
+		prefix := "Debug: "
+		if p.useColors {
+			prefix = colorCyan + "Debug:" + colorReset + " "
+		}
+		fmt.Fprintf(p.writer, prefix+format+"\n", args...)
+	}
 }

@@ -15,5 +15,8 @@ type Printer interface {
 	PrintError(format string, args ...interface{})
 	PrintSuccess(format string, args ...interface{})
 	PrintInfo(format string, args ...interface{})
+	PrintDebug(format string, args ...interface{})
 	SetWriter(w io.Writer)
+	SetLogLevel(level LogLevel)
+	GetLogLevel() LogLevel
 }

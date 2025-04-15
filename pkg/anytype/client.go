@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/epheo/anyblog/pkg/log"
 )
 
 const (
@@ -29,6 +31,7 @@ type Client struct {
 	httpClient   *http.Client
 	debug        bool
 	typeCache    map[string]map[string]string // spaceID -> typeKey -> typeName
+	logger       log.Logger                   // for logging output
 }
 
 // WithTimeout sets a custom timeout for the HTTP client
@@ -42,6 +45,20 @@ func WithTimeout(timeout time.Duration) ClientOption {
 func WithDebug(debug bool) ClientOption {
 	return func(c *Client) {
 		c.debug = debug
+		if c.logger != nil {
+			if debug {
+				c.logger.SetLevel(log.LevelDebug)
+			} else {
+				c.logger.SetLevel(log.LevelInfo)
+			}
+		}
+	}
+}
+
+// WithLogger sets a logger for the client
+func WithLogger(logger log.Logger) ClientOption {
+	return func(c *Client) {
+		c.logger = logger
 	}
 }
 
@@ -77,7 +94,7 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body io.R
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.appKey))
 	req.Header.Set("Anytype-Version", apiVersion)
 
-	if c.debug {
+	if c.debug && c.logger != nil {
 		c.printCurlRequest(method, url, req.Header, bodyToBytes(body))
 	}
 
@@ -90,6 +107,10 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body io.R
 	responseData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error reading response: %w", err)
+	}
+
+	if c.debug && c.logger != nil {
+		c.logger.Debug("Response: %s", string(responseData))
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -154,7 +175,7 @@ func (c *Client) printCurlRequest(method, url string, headers http.Header, body 
 		}
 	}
 
-	fmt.Printf("\nDebug curl command:\n%s\n", sb.String())
+	c.logger.Debug("CURL command:\n%s", sb.String())
 }
 
 // GetTypeName returns the friendly name for a type key, using cache if available

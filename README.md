@@ -27,6 +27,9 @@ anyblog -format json
 # Enable debug mode to see API requests
 anyblog -debug
 
+# Set log level (available levels: error, info, debug)
+anyblog -loglevel debug
+
 # Search in a specific space
 anyblog -space "My Space" -query "search term"
 
@@ -47,7 +50,8 @@ anyblog -no-color
 
 - `-format`: Output format (text or json) [default: text]
 - `-no-color`: Disable colored output
-- `-debug`: Enable debug mode to see API requests
+- `-debug`: Enable debug mode to see API requests (equivalent to -loglevel debug)
+- `-loglevel`: Set logging level (error, info, debug) [default: error]
 - `-timeout`: Operation timeout [default: 30s]
 - `-space`: Space name to use
 - `-type`: Type name to filter search results
@@ -64,6 +68,32 @@ anyblog -no-color
 - Colored terminal output
 - Debug mode for API requests
 - Configurable operation timeout
+
+## Logging
+
+The application supports three logging levels that control the verbosity of output:
+
+- `error`: Only show error messages (default)
+- `info`: Show errors, info, and success messages
+- `debug`: Show all messages including debug information
+
+You can set the logging level in two ways:
+
+```bash
+# Using the loglevel flag
+anyblog -loglevel debug
+
+# Using the debug flag (shortcut for -loglevel debug)
+anyblog -debug
+```
+
+Note: The `-debug` flag takes precedence over `-loglevel` if both are specified.
+
+Examples of log messages at different levels:
+
+- Error: Authentication failures, API errors
+- Info: Space selection, search filters
+- Debug: API requests, raw response data
 
 ## Development
 
@@ -109,4 +139,3 @@ go test ./...
 ## License
 
 MIT License - see LICENSE file for details
-
