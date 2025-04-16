@@ -21,9 +21,10 @@ type flags struct {
 	logLevel  string
 	timeout   time.Duration
 	spaceName string
-	typeName  string
+	typeName  string // Single type name (deprecated)
+	types     string // Comma-separated list of type names
 	query     string
-	tags      string // New: comma-separated list of tags to filter by
+	tags      string // Comma-separated list of tags to filter by
 	curl      bool   // Print curl equivalent of API requests
 }
 
@@ -145,16 +146,42 @@ func run() error {
 		}
 	}
 
-	// Perform search if query, tags, or type is provided
-	if f.query != "" || f.tags != "" || f.typeName != "" {
+	// Perform search if query, tags, or types are provided
+	if f.query != "" || f.tags != "" || f.typeName != "" || f.types != "" {
 		searchParams := &anytype.SearchParams{
 			Query: strings.TrimSpace(f.query),
 			Types: []string{"ot-page"}, // Default to ot-page type
 			Limit: 100,
 		}
 
-		// Add type filter if type name is specified
-		if f.typeName != "" {
+		// Process type filters (priority given to -types over -type for backwards compatibility)
+		if f.types != "" {
+			// Handle multiple types
+			typeNames := strings.Split(f.types, ",")
+			typeKeys := []string{}
+			typeNamesFound := []string{}
+
+			for _, typeName := range typeNames {
+				typeName = strings.TrimSpace(typeName)
+				if typeName == "" {
+					continue
+				}
+
+				typeKey, err := client.GetTypeByName(ctx, targetSpace.ID, typeName)
+				if err != nil {
+					printer.PrintError("Could not find type '%s': %v", typeName, err)
+				} else {
+					typeKeys = append(typeKeys, typeKey)
+					typeNamesFound = append(typeNamesFound, typeName)
+				}
+			}
+
+			if len(typeKeys) > 0 {
+				searchParams.Types = typeKeys
+				printer.PrintInfo("Filtering search results by types: %s", strings.Join(typeNamesFound, ", "))
+			}
+		} else if f.typeName != "" {
+			// For backward compatibility: handle single type
 			typeKey, err := client.GetTypeByName(ctx, targetSpace.ID, f.typeName)
 			if err != nil {
 				printer.PrintError("Could not find type '%s': %v", f.typeName, err)
@@ -191,7 +218,8 @@ func parseFlags() *flags {
 	flag.StringVar(&f.logLevel, "loglevel", "error", "Log level (error, info, debug)")
 	flag.DurationVar(&f.timeout, "timeout", defaultTimeout, "Operation timeout")
 	flag.StringVar(&f.spaceName, "space", "", "Space name to use")
-	flag.StringVar(&f.typeName, "type", "", "Type name to look for")
+	flag.StringVar(&f.typeName, "type", "", "Type name to look for (deprecated, use -types instead)")
+	flag.StringVar(&f.types, "types", "", "Comma-separated list of type names to filter by (e.g., 'Note,Task')")
 	flag.StringVar(&f.query, "query", "", "Search query")
 	flag.StringVar(&f.tags, "tags", "", "Comma-separated list of tags to filter by (e.g., 'important,work')")
 	flag.BoolVar(&f.curl, "curl", false, "Print curl equivalent of API requests")

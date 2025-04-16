@@ -36,8 +36,14 @@ anyblog -space "My Space" -query "search term"
 # Search for objects of a specific type
 anyblog -type "Note" -query "search term"
 
+# Search for objects of multiple types
+anyblog -types "Note,Task,Person" -query "search term"
+
 # Search in a specific space for objects of a specific type
 anyblog -space "My Space" -type "Note" -query "search term"
+
+# Search in a specific space for objects of multiple types
+anyblog -space "My Space" -types "Note,Task" -query "search term"
 
 # Print curl equivalent of all API requests
 anyblog -curl
@@ -57,7 +63,8 @@ anyblog -no-color
 - `-loglevel`: Set logging level (error, info, debug) [default: error]
 - `-timeout`: Operation timeout [default: 30s]
 - `-space`: Space name to use
-- `-type`: Type name to filter search results
+- `-type`: Type name to filter search results (deprecated, use -types instead)
+- `-types`: Comma-separated list of type names to filter search results (e.g., 'Note,Task,Person')
 - `-query`: Search query
 - `-tags`: Comma-separated list of tags to filter by (e.g., 'important,work')
 - `-curl`: Print curl equivalent of API requests
