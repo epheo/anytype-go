@@ -15,17 +15,27 @@ import (
 
 // Command line flags
 type flags struct {
-	format    string
-	noColor   bool
-	debug     bool
-	logLevel  string
-	timeout   time.Duration
-	spaceName string
-	typeName  string // Single type name (deprecated)
-	types     string // Comma-separated list of type names
-	query     string
-	tags      string // Comma-separated list of tags to filter by
-	curl      bool   // Print curl equivalent of API requests
+	format       string
+	noColor      bool
+	debug        bool
+	logLevel     string
+	timeout      time.Duration
+	spaceName    string
+	typeName     string // Single type name (deprecated)
+	types        string // Comma-separated list of type names
+	query        string
+	tags         string // Comma-separated list of tags to filter by
+	curl         bool   // Print curl equivalent of API requests
+	export       bool   // Export objects as files
+	exportPath   string // Path to export files to
+	exportFormat string // Format to export objects as (md, html, etc.)
+}
+
+// exportOptions defines options for exporting objects
+type exportOptions struct {
+	enabled bool
+	path    string
+	format  string
 }
 
 const defaultTimeout = 30 * time.Second
@@ -91,7 +101,7 @@ func findTargetSpace(spaces *anytype.SpacesResponse, spaceName string, printer d
 }
 
 // handleSearch performs the search operation with the given parameters
-func handleSearch(ctx context.Context, client *anytype.Client, targetSpace *anytype.Space, params *anytype.SearchParams, printer display.Printer) error {
+func handleSearch(ctx context.Context, client *anytype.Client, targetSpace *anytype.Space, params *anytype.SearchParams, printer display.Printer, exportOptions *exportOptions) error {
 	results, err := client.Search(ctx, targetSpace.ID, params)
 	if err != nil {
 		return fmt.Errorf("search failed: %w", err)
@@ -99,6 +109,26 @@ func handleSearch(ctx context.Context, client *anytype.Client, targetSpace *anyt
 
 	if err := printer.PrintObjects("Search Results", results.Data, client, ctx); err != nil {
 		return fmt.Errorf("failed to display search results: %w", err)
+	}
+
+	// Handle export if enabled
+	if exportOptions != nil && exportOptions.enabled {
+		printer.PrintInfo("Exporting %d objects to %s in %s format", len(results.Data), exportOptions.path, exportOptions.format)
+
+		// Create export directory if it doesn't exist
+		if err := os.MkdirAll(exportOptions.path, 0755); err != nil {
+			return fmt.Errorf("failed to create export directory: %w", err)
+		}
+
+		exportedFiles, err := client.ExportObjects(ctx, targetSpace.ID, results.Data, exportOptions.path, exportOptions.format)
+		if err != nil {
+			return fmt.Errorf("export failed: %w", err)
+		}
+
+		printer.PrintSuccess("Successfully exported %d objects:", len(exportedFiles))
+		for i, file := range exportedFiles {
+			printer.PrintInfo("  %d. %s", i+1, file)
+		}
 	}
 
 	return nil
@@ -144,6 +174,17 @@ func run() error {
 		} else {
 			printer.PrintSuccess("Found type '%s' with ID: %s", f.typeName, typeID)
 		}
+	}
+
+	// Set up export options if export is enabled
+	var exportOpts *exportOptions
+	if f.export {
+		exportOpts = &exportOptions{
+			enabled: true,
+			path:    f.exportPath,
+			format:  f.exportFormat,
+		}
+		printer.PrintInfo("Export enabled. Objects will be exported to %s in %s format", f.exportPath, f.exportFormat)
 	}
 
 	// Perform search if query, tags, or types are provided
@@ -201,7 +242,20 @@ func run() error {
 			printer.PrintInfo("Filtering search results by tags: %s", strings.Join(tags, ", "))
 		}
 
-		if err := handleSearch(ctx, client, targetSpace, searchParams, printer); err != nil {
+		if err := handleSearch(ctx, client, targetSpace, searchParams, printer, exportOpts); err != nil {
+			return err
+		}
+	} else if f.export {
+		// If export is enabled but no search parameters are provided,
+		// fetch all objects from the space
+		printer.PrintInfo("No search parameters provided, exporting all objects from space %s (%s)", targetSpace.Name, targetSpace.ID)
+
+		searchParams := &anytype.SearchParams{
+			Types: []string{"ot-page"}, // Default to ot-page type
+			Limit: 100,
+		}
+
+		if err := handleSearch(ctx, client, targetSpace, searchParams, printer, exportOpts); err != nil {
 			return err
 		}
 	}
@@ -223,6 +277,11 @@ func parseFlags() *flags {
 	flag.StringVar(&f.query, "query", "", "Search query")
 	flag.StringVar(&f.tags, "tags", "", "Comma-separated list of tags to filter by (e.g., 'important,work')")
 	flag.BoolVar(&f.curl, "curl", false, "Print curl equivalent of API requests")
+
+	// Export options
+	flag.BoolVar(&f.export, "export", false, "Export objects as files")
+	flag.StringVar(&f.exportPath, "export-path", "./exports", "Path to export files to")
+	flag.StringVar(&f.exportFormat, "export-format", "md", "Format to export objects as (md, html)")
 
 	flag.Parse()
 
