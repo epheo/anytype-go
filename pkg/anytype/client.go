@@ -206,15 +206,19 @@ func (c *Client) GetTypeName(ctx context.Context, spaceID, typeKey string) strin
 		c.typeCache[spaceID] = make(map[string]string)
 	}
 
-	// Fetch all types and update cache
-	types, err := c.GetTypes(ctx, spaceID)
-	if err != nil {
-		return typeKey // Return original key if error
-	}
+	// If cache is empty for this space, fetch all types at once
+	// instead of doing it for each type key separately
+	if len(c.typeCache[spaceID]) == 0 {
+		// Fetch all types and update cache
+		types, err := c.GetTypes(ctx, spaceID)
+		if err != nil {
+			return typeKey // Return original key if error
+		}
 
-	// Update cache with all types
-	for _, t := range types.Data {
-		c.typeCache[spaceID][t.UniqueKey] = t.Name
+		// Update cache with all types
+		for _, t := range types.Data {
+			c.typeCache[spaceID][t.UniqueKey] = t.Name
+		}
 	}
 
 	// Return cached value or original key if not found

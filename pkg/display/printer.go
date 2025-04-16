@@ -149,6 +149,20 @@ func (p *printer) PrintObjects(label string, objects []anytype.Object, client *a
 		return anytype.ErrEmptyResponse
 	}
 
+	// Pre-fetch type information for all objects in one go if client is available
+	if client != nil && len(objects) > 0 {
+		// We only need to pre-fetch once per space
+		spacesSeen := make(map[string]bool)
+
+		for _, obj := range objects {
+			if obj.SpaceID != "" && !spacesSeen[obj.SpaceID] {
+				// This will populate the type cache for this space with a single API call
+				client.GetTypeName(ctx, obj.SpaceID, "dummy-key")
+				spacesSeen[obj.SpaceID] = true
+			}
+		}
+	}
+
 	if p.format == formatJSON {
 		return p.PrintJSON(label, objects)
 	}

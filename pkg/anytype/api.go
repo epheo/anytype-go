@@ -146,6 +146,17 @@ func (c *Client) GetTypes(ctx context.Context, spaceID string) (*TypeResponse, e
 		return nil, fmt.Errorf("failed to parse types response: %w", err)
 	}
 
+	// Update the type cache with the retrieved types
+	// Initialize cache for this space if needed
+	if _, ok := c.typeCache[spaceID]; !ok {
+		c.typeCache[spaceID] = make(map[string]string)
+	}
+
+	// Update cache with all types
+	for _, t := range response.Data {
+		c.typeCache[spaceID][t.UniqueKey] = t.Name
+	}
+
 	return &response, nil
 }
 
@@ -158,15 +169,42 @@ func (c *Client) GetTypeByName(ctx context.Context, spaceID, typeName string) (s
 		return "", ErrInvalidTypeID
 	}
 
+	// Initialize cache for this space if needed
+	if _, ok := c.typeCache[spaceID]; !ok {
+		c.typeCache[spaceID] = make(map[string]string)
+	}
+
+	// Check if we have a reverse lookup cache for name -> key
+	reverseCache := make(map[string]string)
+
+	// First check if we can build a reverse lookup from existing cache
+	if cache, ok := c.typeCache[spaceID]; ok && len(cache) > 0 {
+		// Build reverse lookup (name -> key) from existing cache (key -> name)
+		for key, name := range cache {
+			reverseCache[name] = key
+		}
+
+		// Check if we already have this type name in our reverse lookup
+		if typeKey, found := reverseCache[typeName]; found {
+			return typeKey, nil
+		}
+	}
+
+	// If not in cache, fetch all types and update cache
 	types, err := c.GetTypes(ctx, spaceID)
 	if err != nil {
 		return "", err
 	}
 
+	// Update both caches with all types
 	for _, t := range types.Data {
-		if t.Name == typeName {
-			return t.UniqueKey, nil
-		}
+		c.typeCache[spaceID][t.UniqueKey] = t.Name
+		reverseCache[t.Name] = t.UniqueKey
+	}
+
+	// Now check if we have the type after refreshing the cache
+	if typeKey, found := reverseCache[typeName]; found {
+		return typeKey, nil
 	}
 
 	return "", fmt.Errorf("type '%s' not found", typeName)
@@ -225,19 +263,50 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 
 	var response SearchResponse
 	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, wrapError(path, 0, "failed to parse search response", err)
+		return nil, wrapError(path, 0, "failed to unmarshal search response", err)
+	}
+
+	// Extract tags from the Relations field for each object
+	for i := range response.Data {
+		if tags, ok := response.Data[i].Relations["tags"]; ok {
+			// Extract tags based on different possible formats
+			switch v := tags.(type) {
+			case []interface{}:
+				// Handle array of tags
+				response.Data[i].Tags = make([]string, 0, len(v))
+				for _, tag := range v {
+					switch t := tag.(type) {
+					case string:
+						response.Data[i].Tags = append(response.Data[i].Tags, t)
+					case map[string]interface{}:
+						// Handle case where tag might be an object with a name field
+						if name, ok := t["name"].(string); ok {
+							response.Data[i].Tags = append(response.Data[i].Tags, name)
+						}
+					}
+				}
+			case []string:
+				// Handle string array directly
+				response.Data[i].Tags = v
+			case string:
+				// Handle single tag as string
+				response.Data[i].Tags = []string{v}
+			case map[string]interface{}:
+				// Handle case where the whole tags field is a single object
+				if name, ok := v["name"].(string); ok {
+					response.Data[i].Tags = []string{name}
+				}
+			}
+		}
+
+		// Make sure Tags is at least an empty slice, not nil
+		if response.Data[i].Tags == nil {
+			response.Data[i].Tags = []string{}
+		}
+
 	}
 
 	return &response, nil
-}
-
-// quoteStrings wraps each string in quotes for JSON
-func quoteStrings(strs []string) []string {
-	quoted := make([]string, len(strs))
-	for i, s := range strs {
-		quoted[i] = fmt.Sprintf("%q", s)
-	}
-	return quoted
 }
 
 // GetObject retrieves a specific object by ID
