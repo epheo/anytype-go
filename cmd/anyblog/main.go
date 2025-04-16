@@ -133,9 +133,11 @@ func run() error {
 		return err
 	}
 
-	// Find specific type if requested
+	// Identify the type ID if a type name is specified
+	var typeID string
 	if f.typeName != "" {
-		typeID, err := client.GetTypeByName(ctx, targetSpace.ID, f.typeName)
+		var err error
+		typeID, err = client.GetTypeByName(ctx, targetSpace.ID, f.typeName)
 		if err != nil {
 			printer.PrintError("Could not find type '%s': %v", f.typeName, err)
 		} else {
@@ -143,8 +145,8 @@ func run() error {
 		}
 	}
 
-	// Perform search if query or tags provided
-	if f.query != "" || f.tags != "" {
+	// Perform search if query, tags, or type is provided
+	if f.query != "" || f.tags != "" || f.typeName != "" {
 		searchParams := &anytype.SearchParams{
 			Query: strings.TrimSpace(f.query),
 			Types: []string{"ot-page"}, // Default to ot-page type
