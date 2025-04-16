@@ -30,6 +30,7 @@ type Client struct {
 	appKey       string
 	httpClient   *http.Client
 	debug        bool
+	printCurl    bool                         // whether to print curl commands
 	typeCache    map[string]map[string]string // spaceID -> typeKey -> typeName
 	logger       log.Logger                   // for logging output
 }
@@ -59,6 +60,13 @@ func WithDebug(debug bool) ClientOption {
 func WithLogger(logger log.Logger) ClientOption {
 	return func(c *Client) {
 		c.logger = logger
+	}
+}
+
+// WithCurl enables printing curl equivalent of API requests
+func WithCurl(printCurl bool) ClientOption {
+	return func(c *Client) {
+		c.printCurl = printCurl
 	}
 }
 
@@ -94,7 +102,8 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body io.R
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.appKey))
 	req.Header.Set("Anytype-Version", apiVersion)
 
-	if c.debug && c.logger != nil {
+	// Print curl command if debug mode or curl mode is enabled
+	if c.debug || c.printCurl {
 		c.printCurlRequest(method, url, req.Header, bodyToBytes(body))
 	}
 
@@ -175,7 +184,12 @@ func (c *Client) printCurlRequest(method, url string, headers http.Header, body 
 		}
 	}
 
-	c.logger.Debug("CURL command:\n%s", sb.String())
+	// If logger is available, use it; otherwise print to stdout
+	if c.logger != nil {
+		c.logger.Debug("CURL command:\n%s", sb.String())
+	} else {
+		fmt.Printf("CURL command:\n%s\n", sb.String())
+	}
 }
 
 // GetTypeName returns the friendly name for a type key, using cache if available

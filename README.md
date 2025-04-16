@@ -39,6 +39,9 @@ anyblog -type "Note" -query "search term"
 # Search in a specific space for objects of a specific type
 anyblog -space "My Space" -type "Note" -query "search term"
 
+# Print curl equivalent of all API requests
+anyblog -curl
+
 # Set custom timeout
 anyblog -timeout 60s
 
@@ -56,6 +59,8 @@ anyblog -no-color
 - `-space`: Space name to use
 - `-type`: Type name to filter search results
 - `-query`: Search query
+- `-tags`: Comma-separated list of tags to filter by (e.g., 'important,work')
+- `-curl`: Print curl equivalent of API requests
 
 ## Features
 

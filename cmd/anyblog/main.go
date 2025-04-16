@@ -24,6 +24,7 @@ type flags struct {
 	typeName  string
 	query     string
 	tags      string // New: comma-separated list of tags to filter by
+	curl      bool   // Print curl equivalent of API requests
 }
 
 const defaultTimeout = 30 * time.Second
@@ -63,6 +64,7 @@ func setupClient(f *flags) (*anytype.Client, display.Printer, error) {
 		config.SessionToken,
 		config.AppKey,
 		anytype.WithDebug(f.debug),
+		anytype.WithCurl(f.curl),
 	)
 
 	return client, printer, nil
@@ -190,6 +192,7 @@ func parseFlags() *flags {
 	flag.StringVar(&f.typeName, "type", "", "Type name to look for")
 	flag.StringVar(&f.query, "query", "", "Search query")
 	flag.StringVar(&f.tags, "tags", "", "Comma-separated list of tags to filter by (e.g., 'important,work')")
+	flag.BoolVar(&f.curl, "curl", false, "Print curl equivalent of API requests")
 
 	flag.Parse()
 
