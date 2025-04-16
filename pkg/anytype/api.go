@@ -239,8 +239,10 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 		for i, tag := range params.Tags {
 			tags[i] = fmt.Sprintf(`"%s"`, tag)
 		}
-		requestBody.Filter = fmt.Sprintf(`{"relations":{"tags":{"$in":[%s]}}}`,
-			strings.Join(tags, ","))
+
+		// Based on the actual API structure from the terminal output
+		requestBody.Filter = fmt.Sprintf(`{"details.tags.details.tags":{"%s":{"name":{"$in":[%s]}}}}`,
+			"$elemMatch", strings.Join(tags, ","))
 	}
 
 	body, err := json.Marshal(requestBody)

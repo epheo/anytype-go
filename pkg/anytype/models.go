@@ -169,6 +169,16 @@ func (o *Object) UnmarshalJSON(data []byte) error {
 	type Alias Object
 	aux := &struct {
 		*Alias
+		Details []struct {
+			ID      string `json:"id"`
+			Details struct {
+				Tags []struct {
+					ID    string `json:"id"`
+					Name  string `json:"name"`
+					Color string `json:"color"`
+				} `json:"tags"`
+			} `json:"details"`
+		} `json:"details"`
 	}{
 		Alias: (*Alias)(o),
 	}
@@ -176,16 +186,16 @@ func (o *Object) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// Extract tags from relations if present
-	if o.Relations != nil {
-		if tags, ok := o.Relations["tags"].([]interface{}); ok {
-			o.Tags = make([]string, len(tags))
-			for i, tag := range tags {
-				if str, ok := tag.(string); ok {
-					o.Tags[i] = str
-				}
+	// Extract tags from the nested details structure
+	o.Tags = []string{}
+	for _, detail := range aux.Details {
+		if detail.ID == "tags" {
+			for _, tag := range detail.Details.Tags {
+				o.Tags = append(o.Tags, tag.Name)
 			}
+			break
 		}
 	}
+
 	return nil
 }
