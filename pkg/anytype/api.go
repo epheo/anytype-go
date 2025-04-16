@@ -224,7 +224,10 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 
 	path := fmt.Sprintf("/v1/spaces/%s/search", spaceID)
 
-	// Create search request body
+	// Save the tags for post-filtering
+	requestedTags := params.Tags
+
+	// Create search request body without tags filtering
 	requestBody := SearchRequestBody{
 		SpaceID: spaceID,
 		Query:   params.Query,
@@ -233,16 +236,12 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 		Offset:  params.Offset,
 	}
 
-	// Add tags filter using relations if tags are specified
-	if len(params.Tags) > 0 {
-		tags := make([]string, len(params.Tags))
-		for i, tag := range params.Tags {
-			tags[i] = fmt.Sprintf(`"%s"`, tag)
+	// Increase limit if we're filtering by tags to ensure we get enough matches
+	if len(requestedTags) > 0 && requestBody.Limit < 1000 {
+		if c.debug && c.logger != nil {
+			c.logger.Debug("Increasing search limit for tag filtering: %d -> 1000", requestBody.Limit)
 		}
-
-		// Based on the actual API structure from the terminal output
-		requestBody.Filter = fmt.Sprintf(`{"details.tags.details.tags":{"%s":{"name":{"$in":[%s]}}}}`,
-			"$elemMatch", strings.Join(tags, ","))
+		requestBody.Limit = 1000
 	}
 
 	body, err := json.Marshal(requestBody)
@@ -305,7 +304,45 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 		if response.Data[i].Tags == nil {
 			response.Data[i].Tags = []string{}
 		}
+	}
 
+	// Post-process to filter by tags if needed
+	if len(requestedTags) > 0 {
+		if c.debug && c.logger != nil {
+			c.logger.Debug("Filtering %d objects by tags: %v", len(response.Data), requestedTags)
+		}
+
+		filteredObjects := make([]Object, 0)
+
+		// Filter objects that contain ANY of the requested tags
+		for _, obj := range response.Data {
+			// Check if object has any of the requested tags
+			hasTag := false
+			for _, requestedTag := range requestedTags {
+				for _, objTag := range obj.Tags {
+					if strings.EqualFold(requestedTag, objTag) {
+						hasTag = true
+						break
+					}
+				}
+				if hasTag {
+					break
+				}
+			}
+
+			if hasTag {
+				filteredObjects = append(filteredObjects, obj)
+			}
+		}
+
+		// Update the response with filtered objects
+		if c.debug && c.logger != nil {
+			c.logger.Debug("Filtered to %d objects that match tags", len(filteredObjects))
+		}
+
+		// Update pagination info
+		response.Data = filteredObjects
+		response.Pagination.Total = len(filteredObjects)
 	}
 
 	return &response, nil
