@@ -181,13 +181,18 @@ func (p *printer) PrintObjects(label string, objects []anytype.Object, client *a
 		if name == "" {
 			name = "<no name>"
 		}
-		if obj.Icon != "" {
-			name = obj.Icon + " " + name
-		}
+
+		// Format the display name with fixed-width icon space
+		var displayName string
+		// Normalize the icon (ensure it's not nil and handle special cases)
+		icon := obj.Icon
+		// Use GetPaddedIcon to ensure consistent spacing regardless of icon presence or type
+		paddedIcon := GetPaddedIcon(icon, iconFixedWidth)
+		displayName = fmt.Sprintf("%s%s", paddedIcon, name)
 
 		// Truncate name if too long
-		if len(name) > maxNameLength {
-			name = name[:maxNameLength-3] + "..."
+		if len(displayName) > maxNameLength {
+			displayName = displayName[:maxNameLength-3] + "..."
 		}
 
 		// Get friendly type name
@@ -210,7 +215,7 @@ func (p *printer) PrintObjects(label string, objects []anytype.Object, client *a
 			}
 		}
 
-		table.Append([]string{name, typeName, layout, tags})
+		table.Append([]string{displayName, typeName, layout, tags})
 	}
 
 	fmt.Fprintf(p.writer, "\n%s:\n", label)

@@ -16,4 +16,5 @@ func setupTable(table *tablewriter.Table) {
 	table.SetBorder(true)
 	table.SetTablePadding(" ")
 	table.SetNoWhiteSpace(false)
+
 }
