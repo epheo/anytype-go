@@ -27,25 +27,93 @@ const (
 	defaultAPIURL   = "http://localhost:31009"
 	tokenExpiryDays = 30
 	appName         = "anytype-go"
+
+	// Environment variable names
+	envAPIURL       = "ANYTYPE_API_URL"
+	envAppKey       = "ANYTYPE_APP_KEY"
+	envSessionToken = "ANYTYPE_SESSION_TOKEN"
 )
 
 // AuthManager handles authentication operations
 type AuthManager struct {
-	apiURL string
+	apiURL         string
+	nonInteractive bool
+	silent         bool
 }
 
-// NewAuthManager creates a new AuthManager instance
-func NewAuthManager(apiURL string) *AuthManager {
-	if apiURL == "" {
-		apiURL = defaultAPIURL
+// AuthOptions configures the AuthManager
+type AuthOption func(*AuthManager)
+
+// WithAPIURL sets the API URL for the AuthManager
+func WithAPIURL(url string) AuthOption {
+	return func(am *AuthManager) {
+		if url != "" {
+			am.apiURL = url
+		}
 	}
-	return &AuthManager{apiURL: apiURL}
+}
+
+// WithNonInteractive disables interactive prompts
+func WithNonInteractive(nonInteractive bool) AuthOption {
+	return func(am *AuthManager) {
+		am.nonInteractive = nonInteractive
+	}
+}
+
+// WithSilent disables informational output
+func WithSilent(silent bool) AuthOption {
+	return func(am *AuthManager) {
+		am.silent = silent
+	}
+}
+
+// NewAuthManager creates a new AuthManager instance with options
+func NewAuthManager(opts ...AuthOption) *AuthManager {
+	am := &AuthManager{
+		apiURL: defaultAPIURL,
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(am)
+	}
+
+	return am
+}
+
+// GetConfigurationFromEnv attempts to load auth configuration from environment variables
+func GetConfigurationFromEnv() (*anytype.AuthConfig, error) {
+	apiURL := getEnvOrDefault(envAPIURL, defaultAPIURL)
+	appKey := os.Getenv(envAppKey)
+	sessionToken := os.Getenv(envSessionToken)
+
+	if appKey == "" {
+		return nil, fmt.Errorf("%s environment variable is not set", envAppKey)
+	}
+
+	config := &anytype.AuthConfig{
+		ApiURL:       apiURL,
+		SessionToken: sessionToken,
+		AppKey:       appKey,
+		Timestamp:    time.Now(),
+	}
+
+	return config, nil
 }
 
 // GetConfiguration loads or creates new auth configuration
 func (am *AuthManager) GetConfiguration() (*anytype.AuthConfig, error) {
-	// Try to load existing auth configuration
-	config, err := loadAuthConfig()
+	// First, try to get configuration from environment
+	config, err := GetConfigurationFromEnv()
+	if err == nil {
+		if !am.silent {
+			fmt.Println("Using authentication from environment variables")
+		}
+		return config, nil
+	}
+
+	// Next, try to load existing auth configuration
+	config, err = loadAuthConfig()
 	if err == nil && config.AppKey != "" && !isTokenExpired(config.Timestamp) {
 		// Don't print anything here, let the display module handle any output
 		return config, nil
@@ -55,8 +123,45 @@ func (am *AuthManager) GetConfiguration() (*anytype.AuthConfig, error) {
 		return nil, fmt.Errorf("error loading config: %w", err)
 	}
 
-	fmt.Println("No valid authentication found, starting new authentication process")
+	// If we're in non-interactive mode, fail here
+	if am.nonInteractive {
+		return nil, errors.New("no valid authentication found and non-interactive mode is enabled")
+	}
+
+	if !am.silent {
+		fmt.Println("No valid authentication found, starting new authentication process")
+	}
 	return am.createNewAuthConfig()
+}
+
+// GetClient is a convenience function that gets a configured client using the auth config
+func (am *AuthManager) GetClient(opts ...anytype.ClientOption) (*anytype.Client, error) {
+	config, err := am.GetConfiguration()
+	if err != nil {
+		return nil, fmt.Errorf("authentication failed: %w", err)
+	}
+
+	// Create options from the auth config
+	baseOpts := []anytype.ClientOption{
+		anytype.WithURL(config.ApiURL),
+		anytype.WithToken(config.SessionToken),
+		anytype.WithAppKey(config.AppKey),
+	}
+
+	// Append any additional options
+	opts = append(baseOpts, opts...)
+
+	// Create the client
+	return anytype.NewClient(opts...)
+}
+
+// getEnvOrDefault gets an environment variable or returns a default value
+func getEnvOrDefault(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
 }
 
 // createNewAuthConfig performs authentication and creates new config

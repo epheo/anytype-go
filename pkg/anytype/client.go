@@ -8,17 +8,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/epheo/anytype-go/internal/log"
 )
 
+// Constants for client configuration
 const (
 	// HTTP client timeout
 	httpTimeout = 10 * time.Second
 	// Current API version
 	apiVersion = "2025-03-17"
+	// Default API URL
+	defaultAPIURL = "http://localhost:31009"
 )
 
 // ClientOption defines a function type for client configuration
@@ -95,7 +99,7 @@ func WithAppKey(appKey string) ClientOption {
 // NewClient creates a new API client with options
 func NewClient(opts ...ClientOption) (*Client, error) {
 	client := &Client{
-		apiURL:     "http://localhost:31009", // Default API URL
+		apiURL:     defaultAPIURL, // Default API URL
 		httpClient: &http.Client{Timeout: httpTimeout},
 		debug:      false,
 		typeCache:  make(map[string]map[string]string),
@@ -116,6 +120,57 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	}
 
 	return client, nil
+}
+
+// FromAuthConfig creates a new client from an AuthConfig
+func FromAuthConfig(config *AuthConfig, additionalOpts ...ClientOption) (*Client, error) {
+	if config == nil {
+		return nil, fmt.Errorf("auth config cannot be nil")
+	}
+
+	// Start with basic options from the config
+	opts := []ClientOption{
+		WithURL(config.ApiURL),
+		WithToken(config.SessionToken),
+		WithAppKey(config.AppKey),
+	}
+
+	// Add any additional options
+	opts = append(opts, additionalOpts...)
+
+	return NewClient(opts...)
+}
+
+// FromEnvironment creates a new client from environment variables
+func FromEnvironment(additionalOpts ...ClientOption) (*Client, error) {
+	apiURL := getEnvOrDefault("ANYTYPE_API_URL", defaultAPIURL)
+	appKey := os.Getenv("ANYTYPE_APP_KEY")
+	sessionToken := os.Getenv("ANYTYPE_SESSION_TOKEN")
+
+	if appKey == "" {
+		return nil, fmt.Errorf("ANYTYPE_APP_KEY environment variable is not set")
+	}
+
+	// Start with basic options from environment variables
+	opts := []ClientOption{
+		WithURL(apiURL),
+		WithToken(sessionToken),
+		WithAppKey(appKey),
+	}
+
+	// Add any additional options
+	opts = append(opts, additionalOpts...)
+
+	return NewClient(opts...)
+}
+
+// getEnvOrDefault gets an environment variable or returns a default value
+func getEnvOrDefault(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
 }
 
 // makeRequest is a helper function to make HTTP requests

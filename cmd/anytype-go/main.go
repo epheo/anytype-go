@@ -60,23 +60,21 @@ func setupClient(f *flags) (*anytype.Client, display.Printer, error) {
 		printer.SetLogLevel(level)
 	}
 
-	// Initialize auth manager
-	authManager := auth.NewAuthManager("")
+	// Initialize auth manager with options
+	authManager := auth.NewAuthManager(
+		auth.WithAPIURL(""),            // Use default
+		auth.WithNonInteractive(false), // Allow interactive authentication
+		auth.WithSilent(false),         // Show informational messages
+	)
 
-	// Get configuration
-	config, err := authManager.GetConfiguration()
-	if err != nil {
-		return nil, printer, fmt.Errorf("authentication failed: %w", err)
-	}
-
-	// Create API client with options
-	client, err := anytype.NewClient(
-		anytype.WithURL(config.ApiURL),
-		anytype.WithToken(config.SessionToken),
-		anytype.WithAppKey(config.AppKey),
+	// Set up the client options
+	clientOpts := []anytype.ClientOption{
 		anytype.WithDebug(f.debug),
 		anytype.WithCurl(f.curl),
-	)
+	}
+
+	// Create client using the auth manager's helper function
+	client, err := authManager.GetClient(clientOpts...)
 	if err != nil {
 		return nil, printer, fmt.Errorf("failed to create API client: %w", err)
 	}
