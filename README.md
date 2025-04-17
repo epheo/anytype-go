@@ -247,7 +247,7 @@ go build ./cmd/anytype-go
 
 ## Contributing
 
-[Anytype API Reference](https://github.com/anyproto/anytype-heart/blob/main/core/api/docs)
+[Anytype API Reference](https://raw.githubusercontent.com/anyproto/anytype-heart/refs/heads/main/core/api/docs/swagger.yaml)
 
 1. Fork the repository
 2. Create your feature branch

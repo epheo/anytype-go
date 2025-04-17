@@ -113,8 +113,10 @@ func (c *Client) ProcessMarkdownImages(ctx context.Context, markdown, outputDir 
 			continue
 		}
 
-		// Create the new markdown reference
-		newReference := fmt.Sprintf("![%s](%s)", altText, localPath)
+		// Create the new markdown reference with path pointing one directory up
+		// Since we're now storing files in type-specific subdirectories, we need to adjust the path
+		adjustedPath := "../" + localPath
+		newReference := fmt.Sprintf("![%s](%s)", altText, adjustedPath)
 
 		// Replace the reference in the markdown
 		processedMarkdown = strings.Replace(processedMarkdown, originalReference, newReference, 1)

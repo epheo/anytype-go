@@ -56,9 +56,15 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 		return "", fmt.Errorf("failed to get object %s: %w", objectID, err)
 	}
 
-	// Construct the export path
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(exportPath, 0755); err != nil {
+	// Get type name for the subdirectory
+	typeName := "Unknown"
+	if object.Type != nil && object.Type.Name != "" {
+		typeName = sanitizeFilename(object.Type.Name)
+	}
+
+	// Create type-specific subdirectory
+	typeSubdir := filepath.Join(exportPath, typeName)
+	if err := os.MkdirAll(typeSubdir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create export directory: %w", err)
 	}
 
@@ -98,7 +104,7 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 
 	// Create filename without timestamp to allow overwriting
 	filename := fmt.Sprintf("%s.%s", sanitizedName, fileExtension)
-	filePath := filepath.Join(exportPath, filename)
+	filePath := filepath.Join(typeSubdir, filename)
 
 	// Get object content in the requested format
 	content, err := c.getObjectContent(ctx, spaceID, objectID, format)
