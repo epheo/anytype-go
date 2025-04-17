@@ -203,34 +203,17 @@ The `auth` package handles authentication with the Anytype API:
 - `GetConfiguration()`: Get the saved authentication configuration
 - `AuthenticateInteractive()`: Perform interactive authentication
 
-#### display
-
-The `display` package provides formatting and output utilities:
-
-- `NewPrinter()`: Create a new printer for formatted output
-- `PrintSpaces()`: Print a list of spaces
-- `PrintObjects()`: Print a list of objects
-
 ## Features
 
 - Authentication management with automatic token refresh
 - List available spaces
 - Search for objects within spaces
 - Filter searches by object type (uses type's unique key internally)
-- Query object types
-- Pretty-printed output in text or JSON format
 - Colored terminal output
-- Debug mode for API requests
+- Debug mode for API requestsxt or JSON format
 - Configurable operation timeout
 - Export objects to files in different formats
-
-## Logging
-
-The application supports three logging levels that control the verbosity of output:
-
-- `error`: Only show error messages (default)
-- `info`: Show errors, info, and success messages
-- `debug`: Show all messages including debug information
+- Configurable operation timeout
 
 ## Development
 
@@ -250,10 +233,8 @@ pkg/
   auth/              # Authentication
     auth.go          # Auth management
     config.go        # Config handling
-  display/           # Output formatting
-    display.go       # Display utilities
-  log/               # Logging
-    log.go           # Logging interface
+internal/
+  display/           # Output formatting (for internal use only)
 ```
 
 ### Building
@@ -271,7 +252,6 @@ go test ./...
 ## Contributing
 
 [Anytype API Reference](https://github.com/anyproto/anytype-heart/blob/main/core/api/docs/swagger.yaml)
-
 
 1. Fork the repository
 2. Create your feature branch
