@@ -236,6 +236,7 @@ pkg/
     config.go        # Config handling
 internal/
   display/           # Output formatting (for internal use only)
+  log/               # Logging functionality (for internal use only)
 ```
 
 ### 🔨 Building

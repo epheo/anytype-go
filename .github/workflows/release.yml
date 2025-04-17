@@ -53,6 +53,33 @@ jobs:
             ## Documentation
             See the [README](https://github.com/epheo/anytype-go/blob/main/README.md) for complete documentation.
 
+  publish:
+    name: Publish Go Package
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Verify module is publishable
+        run: |
+          go mod tidy
+          go mod verify
+          # Wait for the Go proxy to acknowledge the new version
+          echo "Verifying package availability on Go proxy..."
+          sleep 60  # Give some time for the package to propagate
+          VERSION="${GITHUB_REF#refs/tags/}"
+          echo "Checking for $VERSION..."
+          timeout 300 bash -c 'until curl --silent --fail "https://proxy.golang.org/github.com/epheo/anytype-go/@v/$VERSION.info" > /dev/null; do echo "Waiting for package to be available..."; sleep 10; done'
+          echo "Package is now available on Go proxy!"
+
   build:
     name: Build Binaries
     needs: release
