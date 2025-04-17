@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/epheo/anyblog/pkg/anytype"
+	"github.com/epheo/anytype-go/pkg/anytype"
 )
 
 // Printer defines the interface for output formatting

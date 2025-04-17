@@ -399,6 +399,9 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 	// Extract tags from all objects
 	for i := range response.Data {
 		extractTags(&response.Data[i])
+		if c.debug && c.logger != nil {
+			c.logger.Debug("Object '%s' has tags: %v", response.Data[i].Name, response.Data[i].Tags)
+		}
 	}
 
 	// Apply tag filtering if requested
@@ -417,6 +420,9 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 				for _, objTag := range obj.Tags {
 					if strings.EqualFold(requestedTag, objTag) {
 						hasTag = true
+						if c.debug && c.logger != nil {
+							c.logger.Debug("Object '%s' matches tag '%s' with '%s'", obj.Name, requestedTag, objTag)
+						}
 						break
 					}
 				}
@@ -427,6 +433,8 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 
 			if hasTag {
 				filteredObjects = append(filteredObjects, obj)
+			} else if c.debug && c.logger != nil {
+				c.logger.Debug("Object '%s' was filtered out, tags: %v", obj.Name, obj.Tags)
 			}
 		}
 

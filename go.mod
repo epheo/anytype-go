@@ -1,4 +1,4 @@
-module github.com/epheo/anyblog
+module github.com/epheo/anytype-go
 
 go 1.21
 

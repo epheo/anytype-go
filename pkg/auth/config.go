@@ -7,13 +7,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/epheo/anyblog/pkg/anytype"
+	"github.com/epheo/anytype-go/pkg/anytype"
 )
 
 // Configuration constants
 const (
 	configFileName = "anytype_auth.json"
-	configDirName  = "anyblog"
+	configDirName  = "anytype-go"
 	configFileMode = 0600
 	configDirMode  = 0755
 )

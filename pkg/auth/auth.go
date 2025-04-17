@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/epheo/anyblog/pkg/anytype"
+	"github.com/epheo/anytype-go/pkg/anytype"
 )
 
 // Common errors
@@ -26,7 +26,7 @@ var (
 const (
 	defaultAPIURL   = "http://localhost:31009"
 	tokenExpiryDays = 30
-	appName         = "anyblog"
+	appName         = "anytype-go"
 )
 
 // AuthManager handles authentication operations
@@ -47,11 +47,11 @@ func (am *AuthManager) GetConfiguration() (*anytype.AuthConfig, error) {
 	// Try to load existing auth configuration
 	config, err := loadAuthConfig()
 	if err == nil && config.AppKey != "" && !isTokenExpired(config.Timestamp) {
-		fmt.Println("Loaded existing authentication from config file")
+		// Don't print anything here, let the display module handle any output
 		return config, nil
 	}
 
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !os.IsNotExist(err) && err != ErrConfigNotFound {
 		return nil, fmt.Errorf("error loading config: %w", err)
 	}
 

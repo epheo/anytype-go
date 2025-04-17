@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/epheo/anyblog/pkg/anytype"
+	"github.com/epheo/anytype-go/pkg/anytype"
 	"github.com/olekukonko/tablewriter"
 )
 
@@ -73,7 +73,12 @@ func (p *printer) PrintJSON(label string, data interface{}) error {
 		return fmt.Errorf("error formatting JSON: %w", err)
 	}
 
-	fmt.Fprintf(p.writer, "\n%s:\n%s\n", label, prettyJSON.String())
+	// In JSON format mode, only output the raw JSON without any labels
+	if p.format == formatJSON {
+		fmt.Fprintln(p.writer, prettyJSON.String())
+	} else {
+		fmt.Fprintf(p.writer, "\n%s:\n%s\n", label, prettyJSON.String())
+	}
 	return nil
 }
 
@@ -240,8 +245,13 @@ func (p *printer) PrintObjects(label string, objects []anytype.Object, client *a
 	return nil
 }
 
-// PrintError prints an error message (always enabled)
+// PrintError prints an error message (always enabled unless in JSON mode)
 func (p *printer) PrintError(format string, args ...interface{}) {
+	// Skip logging in JSON mode
+	if p.format == formatJSON {
+		return
+	}
+
 	prefix := "Error: "
 	if p.useColors {
 		prefix = colorRed + "Error:" + colorReset + " "
@@ -251,6 +261,11 @@ func (p *printer) PrintError(format string, args ...interface{}) {
 
 // PrintSuccess prints a success message if info logging is enabled
 func (p *printer) PrintSuccess(format string, args ...interface{}) {
+	// Skip logging in JSON mode
+	if p.format == formatJSON {
+		return
+	}
+
 	if p.logLevel >= LogLevelInfo {
 		prefix := "Success: "
 		if p.useColors {
@@ -262,6 +277,11 @@ func (p *printer) PrintSuccess(format string, args ...interface{}) {
 
 // PrintInfo prints an informational message if info logging is enabled
 func (p *printer) PrintInfo(format string, args ...interface{}) {
+	// Skip logging in JSON mode
+	if p.format == formatJSON {
+		return
+	}
+
 	if p.logLevel >= LogLevelInfo {
 		prefix := "Info: "
 		if p.useColors {
@@ -273,6 +293,11 @@ func (p *printer) PrintInfo(format string, args ...interface{}) {
 
 // PrintDebug prints a debug message if debug logging is enabled
 func (p *printer) PrintDebug(format string, args ...interface{}) {
+	// Skip logging in JSON mode
+	if p.format == formatJSON {
+		return
+	}
+
 	if p.logLevel >= LogLevelDebug {
 		prefix := "Debug: "
 		if p.useColors {
