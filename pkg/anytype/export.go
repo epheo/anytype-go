@@ -211,7 +211,7 @@ func (c *Client) extractObjectContentFromRegularEndpoint(ctx context.Context, sp
 
 	// Add metadata in a discreet way at the bottom
 	sb.WriteString("---\n")
-	sb.WriteString(fmt.Sprintf("Type: %s  \n", obj.Type))
+	sb.WriteString(fmt.Sprintf("Type: %s  \n", obj.Type.Name))
 	if obj.Layout != "" {
 		sb.WriteString(fmt.Sprintf("Layout: %s  \n", obj.Layout))
 	}

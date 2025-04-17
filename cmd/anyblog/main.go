@@ -81,6 +81,22 @@ func setupClient(f *flags) (*anytype.Client, display.Printer, error) {
 	return client, printer, nil
 }
 
+// setupSpaces gets and displays spaces, and finds the target space
+func setupSpaces(ctx context.Context, client *anytype.Client, spaceName string, printer display.Printer) (*anytype.Space, error) {
+	// Get spaces
+	spaces, err := client.GetSpaces(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get spaces: %w", err)
+	}
+
+	if err := printer.PrintSpaces(spaces.Data); err != nil {
+		return nil, fmt.Errorf("failed to display spaces: %w", err)
+	}
+
+	// Find target space
+	return findTargetSpace(spaces, spaceName, printer)
+}
+
 // findTargetSpace finds the target space based on name or returns the first available
 func findTargetSpace(spaces *anytype.SpacesResponse, spaceName string, printer display.Printer) (*anytype.Space, error) {
 	for _, space := range spaces.Data {
@@ -98,6 +114,31 @@ func findTargetSpace(spaces *anytype.SpacesResponse, spaceName string, printer d
 	}
 
 	return nil, fmt.Errorf("no spaces available")
+}
+
+// processTypeFilters resolves type names to type keys for search filtering
+func processTypeFilters(ctx context.Context, client *anytype.Client, spaceID string, typeNames []string, printer display.Printer) ([]string, []string) {
+	typeKeys := []string{}
+	typeNamesFound := []string{}
+
+	for _, typeName := range typeNames {
+		typeName = strings.TrimSpace(typeName)
+		if typeName == "" {
+			continue
+		}
+
+		typeKey, err := client.GetTypeByName(ctx, spaceID, typeName)
+		if err != nil {
+			printer.PrintError("Could not find type '%s': %v", typeName, err)
+		} else if typeKey != "" {
+			typeKeys = append(typeKeys, typeKey)
+			typeNamesFound = append(typeNamesFound, typeName)
+		} else {
+			printer.PrintError("Type key for '%s' resolved to an empty string, skipping", typeName)
+		}
+	}
+
+	return typeKeys, typeNamesFound
 }
 
 // handleSearch performs the search operation with the given parameters
@@ -134,6 +175,85 @@ func handleSearch(ctx context.Context, client *anytype.Client, targetSpace *anyt
 	return nil
 }
 
+// handleDefaultExport performs a default export of all objects when no search parameters are provided
+func handleDefaultExport(ctx context.Context, client *anytype.Client, targetSpace *anytype.Space, exportOpts *exportOptions, printer display.Printer) error {
+	printer.PrintInfo("No search parameters provided, exporting all objects from space %s (%s)", targetSpace.Name, targetSpace.ID)
+
+	searchParams := &anytype.SearchParams{
+		Types: []string{"ot-page"}, // Default to ot-page type
+		Limit: 100,
+	}
+
+	return handleSearch(ctx, client, targetSpace, searchParams, printer, exportOpts)
+}
+
+// prepareSearchParams creates and populates a SearchParams object based on command line flags
+func prepareSearchParams(ctx context.Context, client *anytype.Client, spaceID string, f *flags, printer display.Printer) (*anytype.SearchParams, error) {
+	searchParams := &anytype.SearchParams{
+		Query: strings.TrimSpace(f.query),
+		Limit: 100,
+	}
+
+	// Process type filters (priority given to -types over -type for backwards compatibility)
+	var typeKeys []string
+	var typeNamesFound []string
+
+	if f.types != "" {
+		// Handle multiple types
+		typeNames := strings.Split(f.types, ",")
+		typeKeys, typeNamesFound = processTypeFilters(ctx, client, spaceID, typeNames, printer)
+	} else if f.typeName != "" {
+		// For backward compatibility: handle single type
+		typeKeys, typeNamesFound = processTypeFilters(ctx, client, spaceID, []string{f.typeName}, printer)
+	}
+
+	if len(typeKeys) > 0 {
+		searchParams.Types = typeKeys
+		printer.PrintInfo("Filtering search results by types: %s", strings.Join(typeNamesFound, ", "))
+	} else {
+		printer.PrintInfo("No valid types found, proceeding with search without type filtering")
+	}
+
+	// Add tags filter if tags are specified
+	if f.tags != "" {
+		tags := strings.Split(f.tags, ",")
+		for i := range tags {
+			tags[i] = strings.TrimSpace(tags[i])
+		}
+		searchParams.Tags = tags
+		printer.PrintInfo("Filtering search results by tags: %s", strings.Join(tags, ", "))
+	}
+
+	return searchParams, nil
+}
+
+// setupExportOptions creates export options if export is enabled
+func setupExportOptions(f *flags, printer display.Printer) *exportOptions {
+	if !f.export {
+		return nil
+	}
+
+	exportOpts := &exportOptions{
+		enabled: true,
+		path:    f.exportPath,
+		format:  f.exportFormat,
+	}
+	printer.PrintInfo("Export enabled. Objects will be exported to %s in %s format", f.exportPath, f.exportFormat)
+	return exportOpts
+}
+
+// handleSearchCase prepares search parameters and executes the search
+func handleSearchCase(ctx context.Context, client *anytype.Client, targetSpace *anytype.Space, f *flags, printer display.Printer, exportOpts *exportOptions) error {
+	// Prepare search parameters
+	searchParams, err := prepareSearchParams(ctx, client, targetSpace.ID, f, printer)
+	if err != nil {
+		return err
+	}
+
+	// Execute search and handle results
+	return handleSearch(ctx, client, targetSpace, searchParams, printer, exportOpts)
+}
+
 func run() error {
 	// Parse command line flags
 	f := parseFlags()
@@ -148,131 +268,27 @@ func run() error {
 		return err
 	}
 
-	// Get spaces
-	spaces, err := client.GetSpaces(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get spaces: %w", err)
-	}
-
-	if err := printer.PrintSpaces(spaces.Data); err != nil {
-		return fmt.Errorf("failed to display spaces: %w", err)
-	}
-
-	// Find target space
-	targetSpace, err := findTargetSpace(spaces, f.spaceName, printer)
+	// Setup spaces and find target space
+	targetSpace, err := setupSpaces(ctx, client, f.spaceName, printer)
 	if err != nil {
 		return err
 	}
 
-	// Identify the type ID if a type name is specified
-	var typeID string
-	if f.typeName != "" {
-		var err error
-		typeID, err = client.GetTypeByName(ctx, targetSpace.ID, f.typeName)
-		if err != nil {
-			printer.PrintError("Could not find type '%s': %v", f.typeName, err)
-		} else {
-			printer.PrintSuccess("Found type '%s' with ID: %s", f.typeName, typeID)
-		}
-	}
-
 	// Set up export options if export is enabled
-	var exportOpts *exportOptions
-	if f.export {
-		exportOpts = &exportOptions{
-			enabled: true,
-			path:    f.exportPath,
-			format:  f.exportFormat,
-		}
-		printer.PrintInfo("Export enabled. Objects will be exported to %s in %s format", f.exportPath, f.exportFormat)
-	}
+	exportOpts := setupExportOptions(f, printer)
 
-	// Perform search if query, tags, or types are provided
-	if f.query != "" || f.tags != "" || f.typeName != "" || f.types != "" {
-		searchParams := &anytype.SearchParams{
-			Query: strings.TrimSpace(f.query),
-			Limit: 100,
-		}
+	// Determine if we need to perform a search
+	hasSearchParams := f.query != "" || f.tags != "" || f.typeName != "" || f.types != ""
 
-		// Process type filters (priority given to -types over -type for backwards compatibility)
-		typesSpecified := false
-		if f.types != "" {
-			// Handle multiple types
-			typeNames := strings.Split(f.types, ",")
-			typeKeys := []string{}
-			typeNamesFound := []string{}
-
-			for _, typeName := range typeNames {
-				typeName = strings.TrimSpace(typeName)
-				if typeName == "" {
-					continue
-				}
-
-				typeKey, err := client.GetTypeByName(ctx, targetSpace.ID, typeName)
-				if err != nil {
-					printer.PrintError("Could not find type '%s': %v", typeName, err)
-				} else {
-					// Only add non-empty type keys
-					if typeKey != "" {
-						typeKeys = append(typeKeys, typeKey)
-						typeNamesFound = append(typeNamesFound, typeName)
-					} else {
-						printer.PrintError("Type key for '%s' resolved to an empty string, skipping", typeName)
-					}
-				}
-			}
-
-			if len(typeKeys) > 0 {
-				searchParams.Types = typeKeys
-				printer.PrintInfo("Filtering search results by types: %s", strings.Join(typeNamesFound, ", "))
-				typesSpecified = true
-			} else {
-				printer.PrintInfo("No valid type keys found, proceeding with search without type filtering")
-			}
-		} else if f.typeName != "" {
-			// For backward compatibility: handle single type
-			typeKey, err := client.GetTypeByName(ctx, targetSpace.ID, f.typeName)
-			if err != nil {
-				printer.PrintError("Could not find type '%s': %v", f.typeName, err)
-			} else if typeKey != "" {
-				searchParams.Types = []string{typeKey}
-				printer.PrintInfo("Filtering search results by type: %s", f.typeName)
-				typesSpecified = true
-			} else {
-				printer.PrintError("Type key for '%s' resolved to an empty string, proceeding without type filtering", f.typeName)
-			}
-		}
-
-		// If no valid types were found, use the default page type
-		if !typesSpecified {
-			// Don't include types in search to avoid filter issues
-			printer.PrintInfo("Proceeding with search without type filtering")
-		}
-
-		// Add tags filter if tags are specified
-		if f.tags != "" {
-			tags := strings.Split(f.tags, ",")
-			for i := range tags {
-				tags[i] = strings.TrimSpace(tags[i])
-			}
-			searchParams.Tags = tags
-			printer.PrintInfo("Filtering search results by tags: %s", strings.Join(tags, ", "))
-		}
-
-		if err := handleSearch(ctx, client, targetSpace, searchParams, printer, exportOpts); err != nil {
+	if hasSearchParams {
+		// Handle search case
+		if err := handleSearchCase(ctx, client, targetSpace, f, printer, exportOpts); err != nil {
 			return err
 		}
 	} else if f.export {
 		// If export is enabled but no search parameters are provided,
-		// fetch all objects from the space
-		printer.PrintInfo("No search parameters provided, exporting all objects from space %s (%s)", targetSpace.Name, targetSpace.ID)
-
-		searchParams := &anytype.SearchParams{
-			Types: []string{"ot-page"}, // Default to ot-page type
-			Limit: 100,
-		}
-
-		if err := handleSearch(ctx, client, targetSpace, searchParams, printer, exportOpts); err != nil {
+		// perform default export
+		if err := handleDefaultExport(ctx, client, targetSpace, exportOpts, printer); err != nil {
 			return err
 		}
 	}
