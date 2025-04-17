@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/epheo/anytype-go/pkg/log"
+	"github.com/epheo/anytype-go/internal/log"
 )
 
 const (

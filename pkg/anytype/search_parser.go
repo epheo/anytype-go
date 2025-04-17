@@ -3,16 +3,13 @@ package anytype
 import (
 	"encoding/json"
 	"strings"
-)
 
-// Logger defines methods for logging
-type Logger interface {
-	Debug(format string, args ...interface{})
-}
+	"github.com/epheo/anytype-go/internal/log"
+)
 
 // ParseSearchResponse attempts to parse the API response data into a SearchResponse
 // using multiple formats to handle different API versions or formats
-func ParseSearchResponse(data []byte, debug bool, logger Logger) (*SearchResponse, error) {
+func ParseSearchResponse(data []byte, debug bool, logger log.Logger) (*SearchResponse, error) {
 	// Try direct format first
 	var response SearchResponse
 	err := json.Unmarshal(data, &response)
