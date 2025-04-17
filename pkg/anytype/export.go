@@ -11,7 +11,8 @@ import (
 )
 
 // SupportedExportFormats defines the available export formats
-var SupportedExportFormats = []string{"markdown", "md"}
+// The API officially supports only "markdown" format (per Swagger spec)
+var SupportedExportFormats = []string{"markdown"}
 
 // ExportObject exports an object's content to a file in the specified format
 func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath, format string) (string, error) {
@@ -33,7 +34,7 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 		format = "markdown"
 	}
 
-	// Validate format
+	// Validate format against officially supported formats
 	validFormat := false
 	for _, f := range SupportedExportFormats {
 		if format == f {
@@ -41,8 +42,13 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 			break
 		}
 	}
+
+	// According to Swagger, only "markdown" is officially supported,
+	// but we'll allow other formats with a warning
 	if !validFormat {
-		return "", fmt.Errorf("unsupported export format: %s (only 'markdown' or 'md' is currently supported)", format)
+		if c.logger != nil {
+			c.logger.Info("Format '%s' is not officially supported by the Anytype API (only 'markdown' is guaranteed). Attempting export anyway.", format)
+		}
 	}
 
 	// Get the object to get its metadata
@@ -84,11 +90,17 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 
 	// Construct file path with timestamp to avoid overwriting
 	timestamp := time.Now().Format("20060102_150405")
-	filenameFormat := "md"
-	if format != "markdown" {
-		filenameFormat = format
+
+	// Determine proper file extension based on the format
+	var fileExtension string
+	switch format {
+	case "markdown":
+		fileExtension = "md"
+	default:
+		fileExtension = format
 	}
-	filename := fmt.Sprintf("%s_%s.%s", sanitizedName, timestamp, filenameFormat)
+
+	filename := fmt.Sprintf("%s_%s.%s", sanitizedName, timestamp, fileExtension)
 	filePath := filepath.Join(exportPath, filename)
 
 	// Get object content in the requested format
@@ -146,7 +158,7 @@ func (c *Client) getObjectContent(ctx context.Context, spaceID, objectID, format
 		return "", fmt.Errorf("received empty response for object %s", objectID)
 	}
 
-	// Try to parse the response as JSON first
+	// Try to parse the response as JSON
 	var response struct {
 		Markdown string `json:"markdown"`
 		Content  string `json:"content"`
@@ -154,16 +166,19 @@ func (c *Client) getObjectContent(ctx context.Context, spaceID, objectID, format
 
 	if err := json.Unmarshal(data, &response); err == nil {
 		// Successfully parsed as JSON
+		// Check for markdown field first
 		if response.Markdown != "" {
 			return response.Markdown, nil
 		}
+
+		// Fall back to generic content field
 		if response.Content != "" {
 			return response.Content, nil
 		}
 	}
 
-	// If JSON parsing fails or no content/markdown field found,
-	// return the raw data as a string (the API might return raw markdown)
+	// If JSON parsing fails or no appropriate content field found,
+	// return the raw data as it might be raw markdown
 	return string(data), nil
 }
 

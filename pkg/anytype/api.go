@@ -584,6 +584,16 @@ func (c *Client) GetObject(ctx context.Context, spaceID, objectID string) (*Obje
 		return nil, fmt.Errorf("failed to get object %s: %w", objectID, err)
 	}
 
+	// First try to unmarshal with a wrapper structure to handle nested response format
+	var objectResponse struct {
+		Object Object `json:"object"`
+	}
+	if err := json.Unmarshal(data, &objectResponse); err == nil {
+		// Successfully parsed with wrapper structure
+		return &objectResponse.Object, nil
+	}
+
+	// If that didn't work, try direct unmarshaling
 	var object Object
 	if err := json.Unmarshal(data, &object); err != nil {
 		return nil, fmt.Errorf("failed to parse object response: %w", err)
