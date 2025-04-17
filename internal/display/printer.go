@@ -110,7 +110,8 @@ func (p *printer) PrintSpaces(spaces []anytype.Space) error {
 	}
 
 	if p.format == formatJSON {
-		return p.PrintJSON("Available spaces", spaces)
+		// In JSON format, don't return spaces data
+		return nil
 	}
 
 	table := tablewriter.NewWriter(p.writer)
