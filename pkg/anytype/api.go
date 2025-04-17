@@ -203,7 +203,7 @@ func (c *Client) GetTypes(ctx context.Context, spaceID string) (*TypeResponse, e
 		return nil, fmt.Errorf("failed to get types for space %s: %w", spaceID, err)
 	}
 
-	// According to Swagger, this should follow the pagination.PaginatedResponse-object_Type schema
+	// This follows the API's pagination response format for types
 	var response TypeResponse
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse types response: %w", err)
@@ -389,7 +389,7 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 		}, nil
 	}
 
-	// According to Swagger, search responses should follow the pagination.PaginatedResponse-object_Object schema
+	// The API returns search responses in a paginated format
 	// which has a data array of objects and a pagination object
 	var response SearchResponse
 	if err := json.Unmarshal(data, &response); err != nil {
@@ -466,8 +466,8 @@ func (c *Client) GetObject(ctx context.Context, spaceID, objectID string) (*Obje
 		return nil, fmt.Errorf("failed to get object %s: %w", objectID, err)
 	}
 
-	// According to Swagger, the response is structured with an "object" field
-	// containing the Object data - this matches the object.ObjectResponse schema
+	// The API response is structured with an "object" field
+	// containing the Object data in the standard response format
 	var objectResponse struct {
 		Object Object `json:"object"`
 	}
@@ -513,8 +513,8 @@ func (c *Client) CreateObject(ctx context.Context, spaceID string, object *Objec
 		return nil, fmt.Errorf("failed to create object: %w", err)
 	}
 
-	// According to Swagger, the response is structured with an "object" field
-	// containing the Object data - this matches the object.ObjectResponse schema
+	// The API response is structured with an "object" field
+	// containing the Object data in the standard response format
 	var objectResponse struct {
 		Object Object `json:"object"`
 	}
@@ -545,6 +545,56 @@ func (c *Client) DeleteObject(ctx context.Context, spaceID, objectID string) err
 	}
 
 	return nil
+}
+
+// UpdateObject updates an existing object in a space
+func (c *Client) UpdateObject(ctx context.Context, spaceID, objectID string, object *Object) (*Object, error) {
+	if spaceID == "" {
+		return nil, ErrInvalidSpaceID
+	}
+	if objectID == "" {
+		return nil, ErrInvalidObjectID
+	}
+	if object == nil {
+		return nil, ErrInvalidParameter
+	}
+
+	// Ensure the object ID in the path matches the object ID in the body
+	object.ID = objectID
+
+	// Ensure we add tags to Relations if they're specified in the Tags field
+	if len(object.Tags) > 0 {
+		if object.Relations == nil {
+			object.Relations = make(map[string]interface{})
+		}
+		object.Relations["tags"] = object.Tags
+	}
+
+	path := fmt.Sprintf("/v1/spaces/%s/objects/%s", spaceID, objectID)
+	body, err := json.Marshal(object)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal object: %w", err)
+	}
+
+	data, err := c.makeRequest(ctx, http.MethodPut, path, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to update object %s: %w", objectID, err)
+	}
+
+	// The API response is structured with an "object" field
+	// containing the Object data in the standard response format
+	var objectResponse struct {
+		Object Object `json:"object"`
+	}
+
+	if err := json.Unmarshal(data, &objectResponse); err != nil {
+		return nil, fmt.Errorf("failed to parse updated object response: %w", err)
+	}
+
+	// Extract tags using the helper function
+	extractTags(&objectResponse.Object)
+
+	return &objectResponse.Object, nil
 }
 
 // GetMembers retrieves members of a space

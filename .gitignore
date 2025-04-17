@@ -1,6 +1,8 @@
 bin/
 exports/
 
+swagger.yaml
+
 # Binaries for programs and plugins
 *.exe
 *.exe~

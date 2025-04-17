@@ -16,7 +16,7 @@ var (
 )
 
 // Icon represents an icon in Anytype
-// Matches the util.Icon schema in the swagger documentation
+// Matches the util.Icon schema in the API documentation
 type Icon struct {
 	Format string `json:"format,omitempty"` // Format of the icon: emoji, file, or icon
 	Emoji  string `json:"emoji,omitempty"`  // Emoji character if format is emoji
@@ -26,7 +26,7 @@ type Icon struct {
 }
 
 // Block represents a content block in an object
-// Matches the object.Block schema in the swagger documentation
+// Matches the object.Block schema in the API documentation
 type Block struct {
 	ID              string      `json:"id,omitempty"`               // Block ID
 	ChildrenIDs     []string    `json:"children_ids,omitempty"`     // Child block IDs
@@ -39,7 +39,7 @@ type Block struct {
 }
 
 // TextBlock represents text content in a block
-// Matches the object.Text schema in the swagger documentation
+// Matches the object.Text schema in the API documentation
 type TextBlock struct {
 	Text    string `json:"text,omitempty"`    // Text content
 	Style   string `json:"style,omitempty"`   // Style: Paragraph, Header1, etc.
@@ -49,7 +49,7 @@ type TextBlock struct {
 }
 
 // FileBlock represents file content in a block
-// Matches the object.File schema in the swagger documentation
+// Matches the object.File schema in the API documentation
 type FileBlock struct {
 	Hash           string `json:"hash,omitempty"`             // File hash
 	Name           string `json:"name,omitempty"`             // File name
@@ -63,7 +63,7 @@ type FileBlock struct {
 }
 
 // TypeInfo represents a type in Anytype
-// Matches the object.Type schema in the swagger documentation
+// Matches the object.Type schema in the API documentation
 type TypeInfo struct {
 	Object            string `json:"object,omitempty"`             // Data model, always "type"
 	ID                string `json:"id,omitempty"`                 // Unique ID of the type
@@ -96,7 +96,7 @@ type (
 	}
 
 	// Space represents a space in Anytype
-	// Matches the space.Space schema in the swagger documentation
+	// Matches the space.Space schema in the API documentation
 	Space struct {
 		Object            string   `json:"object,omitempty"`              // Data model, e.g. "space"
 		ID                string   `json:"id,omitempty"`                  // Unique ID of the space
@@ -122,7 +122,7 @@ type (
 	}
 
 	// Member represents a member of a space
-	// Matches the space.Member schema in the swagger documentation
+	// Matches the space.Member schema in the API documentation
 	Member struct {
 		Object     string `json:"object,omitempty"`      // Data model, e.g. "member"
 		ID         string `json:"id,omitempty"`          // Member ID
@@ -185,7 +185,7 @@ type (
 	}
 
 	// Object represents an object in a space
-	// Matches the object.Object schema in the swagger documentation
+	// Matches the object.Object schema in the API documentation
 	Object struct {
 		Object     string                 `json:"object,omitempty"`     // Data model, e.g. "object"
 		ID         string                 `json:"id,omitempty"`         // Unique ID of the object

@@ -10,7 +10,7 @@ import (
 )
 
 // SupportedExportFormats defines the available export formats
-// The API officially supports only "markdown" format (per Swagger spec)
+// The API officially supports only "markdown" format
 var SupportedExportFormats = []string{"markdown"}
 
 // ExportObject exports an object's content to a file in the specified format
@@ -42,7 +42,7 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 		}
 	}
 
-	// According to Swagger, only "markdown" is officially supported,
+	// Only "markdown" is officially supported by the API,
 	// but we'll allow other formats with a warning
 	if !validFormat {
 		if c.logger != nil {
