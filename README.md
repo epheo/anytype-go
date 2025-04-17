@@ -270,6 +270,9 @@ go test ./...
 
 ## Contributing
 
+[Anytype API Reference](https://github.com/anyproto/anytype-heart/blob/main/core/api/docs/swagger.yaml)
+
+
 1. Fork the repository
 2. Create your feature branch
 3. Commit your changes
