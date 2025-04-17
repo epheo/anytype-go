@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -122,7 +123,7 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body io.R
 	url := c.apiURL + path
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
+		return nil, WrapError(path, 0, "failed to create HTTP request", err)
 	}
 
 	// Set standard headers
@@ -137,13 +138,20 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body io.R
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error making request: %w", err)
+		// Check if context was canceled
+		if errors.Is(err, context.Canceled) {
+			return nil, WrapError(path, 0, "request canceled", err)
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, WrapError(path, 0, "request timed out", ErrOperationTimeout)
+		}
+		return nil, WrapError(path, 0, "failed to execute HTTP request", fmt.Errorf("%w: %s", ErrNetworkError, err.Error()))
 	}
 	defer resp.Body.Close()
 
 	responseData, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error reading response: %w", err)
+		return nil, WrapError(path, resp.StatusCode, "failed to read response body", err)
 	}
 
 	if c.debug && c.logger != nil {
@@ -151,7 +159,8 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body io.R
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, extractErrorFromResponse(path, resp.StatusCode, responseData)
+		baseError := StatusCodeToError(resp.StatusCode)
+		return nil, extractErrorFromResponse(path, resp.StatusCode, responseData, baseError)
 	}
 
 	return responseData, nil
@@ -169,24 +178,35 @@ func bodyToBytes(body io.Reader) []byte {
 }
 
 // extractErrorFromResponse tries to extract a meaningful error message from API response
-func extractErrorFromResponse(path string, statusCode int, responseData []byte) error {
+func extractErrorFromResponse(path string, statusCode int, responseData []byte, baseErr error) error {
 	var apiError struct {
 		Message string `json:"message,omitempty"`
 		Error   string `json:"error,omitempty"`
+		Details string `json:"details,omitempty"`
+		Code    string `json:"code,omitempty"`
 	}
 
 	if err := json.Unmarshal(responseData, &apiError); err != nil {
-		return fmt.Errorf("API error: %s returned status %d", path, statusCode)
+		return WrapError(path, statusCode, "unknown error", baseErr)
 	}
 
-	if msg := apiError.Message; msg != "" {
-		return fmt.Errorf("API error: %s returned status %d - %s", path, statusCode, msg)
-	}
-	if msg := apiError.Error; msg != "" {
-		return fmt.Errorf("API error: %s returned status %d - %s", path, statusCode, msg)
+	// Extract error message
+	message := "unknown error"
+	if apiError.Message != "" {
+		message = apiError.Message
+	} else if apiError.Error != "" {
+		message = apiError.Error
 	}
 
-	return fmt.Errorf("API error: %s returned status %d", path, statusCode)
+	// Extract additional details
+	details := ""
+	if apiError.Details != "" {
+		details = apiError.Details
+	} else if apiError.Code != "" {
+		details = "code: " + apiError.Code
+	}
+
+	return WrapErrorWithDetails(path, statusCode, message, details, baseErr)
 }
 
 // printCurlRequest prints a curl command equivalent to the current request

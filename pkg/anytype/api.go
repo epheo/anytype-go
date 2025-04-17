@@ -15,13 +15,6 @@ const (
 	defaultSearchOffset = 0
 )
 
-// Custom error types for better error handling
-var (
-	ErrEmptyResponse   = fmt.Errorf("empty response from API")
-	ErrInvalidResponse = fmt.Errorf("invalid response format")
-	ErrMissingRequired = fmt.Errorf("missing required parameter")
-)
-
 // extractTags is a helper function to extract tags from an object's Relations and Properties
 func extractTags(obj *Object) {
 	// Extract tags from the Relations field if present
@@ -73,25 +66,6 @@ func extractTags(obj *Object) {
 			}
 		}
 	}
-}
-
-// Error wraps API errors with additional context
-type Error struct {
-	StatusCode int
-	Message    string
-	Path       string
-	Err        error
-}
-
-func (e *Error) Error() string {
-	if e.StatusCode != 0 {
-		return fmt.Sprintf("API error: %s (status %d) - %s", e.Path, e.StatusCode, e.Message)
-	}
-	return fmt.Sprintf("API error: %s - %s", e.Path, e.Message)
-}
-
-func (e *Error) Unwrap() error {
-	return e.Err
 }
 
 // wrapError creates a new Error with context

@@ -2,17 +2,7 @@ package anytype
 
 import (
 	"encoding/json"
-	"errors"
 	"time"
-)
-
-// Common errors
-var (
-	ErrInvalidSpaceID   = errors.New("invalid space ID")
-	ErrInvalidObjectID  = errors.New("invalid object ID")
-	ErrInvalidTypeID    = errors.New("invalid type ID")
-	ErrInvalidTemplate  = errors.New("invalid template")
-	ErrInvalidParameter = errors.New("invalid parameter")
 )
 
 // Icon represents an icon in Anytype
