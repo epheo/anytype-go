@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // SupportedExportFormats defines the available export formats
@@ -88,9 +87,6 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 		sanitizedName = fmt.Sprintf("object-%s", objectID)
 	}
 
-	// Construct file path with timestamp to avoid overwriting
-	timestamp := time.Now().Format("20060102_150405")
-
 	// Determine proper file extension based on the format
 	var fileExtension string
 	switch format {
@@ -100,7 +96,8 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 		fileExtension = format
 	}
 
-	filename := fmt.Sprintf("%s_%s.%s", sanitizedName, timestamp, fileExtension)
+	// Create filename without timestamp to allow overwriting
+	filename := fmt.Sprintf("%s.%s", sanitizedName, fileExtension)
 	filePath := filepath.Join(exportPath, filename)
 
 	// Get object content in the requested format

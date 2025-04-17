@@ -203,6 +203,7 @@ func (c *Client) GetTypes(ctx context.Context, spaceID string) (*TypeResponse, e
 		return nil, fmt.Errorf("failed to get types for space %s: %w", spaceID, err)
 	}
 
+	// According to Swagger, this should follow the pagination.PaginatedResponse-object_Type schema
 	var response TypeResponse
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse types response: %w", err)
