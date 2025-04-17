@@ -388,185 +388,58 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 		}, nil
 	}
 
-	// First try to parse the response as a map to understand its structure
-	var rawResponse map[string]interface{}
-	if err := json.Unmarshal(data, &rawResponse); err == nil && c.debug && c.logger != nil {
-		keys := make([]string, 0, len(rawResponse))
-		for k := range rawResponse {
-			keys = append(keys, k)
-		}
-		c.logger.Debug("Response structure keys: %v", keys)
+	// According to Swagger, search responses should follow the pagination.PaginatedResponse-object_Object schema
+	// which has a data array of objects and a pagination object
+	var response SearchResponse
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, wrapError(path, 0, "failed to parse search response", err)
 	}
 
-	// Adjust the response format - first try to unmarshal into a structure with items array
-	// which is how the API returns data in newer versions
-	if _, hasItems := rawResponse["items"]; hasItems {
-		// New format with "items" array
-		var responseItems struct {
-			Items      []Object   `json:"items"`
-			Total      int        `json:"total"`
-			Limit      int        `json:"limit"`
-			Offset     int        `json:"offset"`
-			Pagination Pagination `json:"pagination,omitempty"`
-		}
+	// Extract tags from all objects
+	for i := range response.Data {
+		extractTags(&response.Data[i])
+	}
 
-		if err := json.Unmarshal(data, &responseItems); err != nil {
-			if c.debug && c.logger != nil {
-				c.logger.Debug("Failed to unmarshal items format: %v", err)
-			}
-			return nil, wrapError(path, 0, "failed to unmarshal search response (items format)", err)
-		}
-
-		// Successfully parsed in the items format
+	// Apply tag filtering if requested
+	if len(requestedTags) > 0 {
 		if c.debug && c.logger != nil {
-			c.logger.Debug("Successfully parsed search response in items format")
+			c.logger.Debug("Filtering %d objects by tags: %v", len(response.Data), requestedTags)
 		}
 
-		// Extract tags from objects
-		for i := range responseItems.Items {
-			extractTags(&responseItems.Items[i])
-		}
+		filteredObjects := make([]Object, 0)
 
-		return &SearchResponse{
-			Data: responseItems.Items,
-			Pagination: Pagination{
-				Total:   responseItems.Total,
-				Limit:   responseItems.Limit,
-				Offset:  responseItems.Offset,
-				HasMore: responseItems.Total > (responseItems.Offset + responseItems.Limit),
-			},
-		}, nil
-	} else if rawObjects, hasObjects := rawResponse["objects"]; hasObjects {
-		// Format with "objects" array which appears in the search by tags response
-		if c.debug && c.logger != nil {
-			c.logger.Debug("Found objects array in response")
-		}
-
-		var objects []Object
-		rawObjectsData, err := json.Marshal(rawObjects)
-		if err != nil {
-			if c.debug && c.logger != nil {
-				c.logger.Debug("Failed to marshal objects data: %v", err)
-			}
-			return nil, wrapError(path, 0, "failed to marshal objects data", err)
-		}
-
-		if err := json.Unmarshal(rawObjectsData, &objects); err != nil {
-			if c.debug && c.logger != nil {
-				c.logger.Debug("Failed to unmarshal objects array: %v", err)
-			}
-			return nil, wrapError(path, 0, "failed to unmarshal objects array", err)
-		}
-
-		// Extract pagination info
-		var pagination struct {
-			Total   int  `json:"total"`
-			Offset  int  `json:"offset"`
-			Limit   int  `json:"limit"`
-			HasMore bool `json:"has_more"`
-		}
-
-		if raw, ok := rawResponse["pagination"]; ok {
-			rawData, err := json.Marshal(raw)
-			if err == nil {
-				_ = json.Unmarshal(rawData, &pagination)
-			}
-		} else {
-			// Default pagination if not provided
-			pagination.Total = len(objects)
-			pagination.Limit = params.Limit
-			pagination.Offset = params.Offset
-		}
-
-		if c.debug && c.logger != nil {
-			c.logger.Debug("Successfully parsed search response in objects format")
-		}
-
-		// Extract tags from objects
-		for i := range objects {
-			extractTags(&objects[i])
-		}
-
-		return &SearchResponse{
-			Data: objects,
-			Pagination: Pagination{
-				Total:   pagination.Total,
-				Limit:   pagination.Limit,
-				Offset:  pagination.Offset,
-				HasMore: pagination.HasMore,
-			},
-		}, nil
-	} else if _, hasData := rawResponse["data"]; hasData {
-		// Original format with "data" array
-		var response SearchResponse
-		if err := json.Unmarshal(data, &response); err != nil {
-			if c.debug && c.logger != nil {
-				c.logger.Debug("Failed to unmarshal data format: %v", err)
-			}
-			return nil, wrapError(path, 0, "failed to unmarshal search response (data format)", err)
-		}
-
-		if c.debug && c.logger != nil {
-			c.logger.Debug("Successfully parsed search response in data format")
-		}
-
-		// Extract tags from the Relations field for each object
-		for i := range response.Data {
-			extractTags(&response.Data[i])
-		}
-
-		// Post-process to filter by tags if needed
-		if len(requestedTags) > 0 {
-			if c.debug && c.logger != nil {
-				c.logger.Debug("Filtering %d objects by tags: %v", len(response.Data), requestedTags)
-			}
-
-			filteredObjects := make([]Object, 0)
-
-			// Filter objects that contain ANY of the requested tags
-			for _, obj := range response.Data {
-				// Check if object has any of the requested tags
-				hasTag := false
-				for _, requestedTag := range requestedTags {
-					for _, objTag := range obj.Tags {
-						if strings.EqualFold(requestedTag, objTag) {
-							hasTag = true
-							break
-						}
-					}
-					if hasTag {
+		// Filter objects that contain ANY of the requested tags
+		for _, obj := range response.Data {
+			// Check if object has any of the requested tags
+			hasTag := false
+			for _, requestedTag := range requestedTags {
+				for _, objTag := range obj.Tags {
+					if strings.EqualFold(requestedTag, objTag) {
+						hasTag = true
 						break
 					}
 				}
-
 				if hasTag {
-					filteredObjects = append(filteredObjects, obj)
+					break
 				}
 			}
 
-			// Update the response with filtered objects
-			if c.debug && c.logger != nil {
-				c.logger.Debug("Filtered to %d objects that match tags", len(filteredObjects))
+			if hasTag {
+				filteredObjects = append(filteredObjects, obj)
 			}
-
-			// Update pagination info
-			response.Data = filteredObjects
-			response.Pagination.Total = len(filteredObjects)
 		}
 
-		return &response, nil
+		// Update the response with filtered objects
+		if c.debug && c.logger != nil {
+			c.logger.Debug("Filtered to %d objects that match tags", len(filteredObjects))
+		}
+
+		// Update pagination info
+		response.Data = filteredObjects
+		response.Pagination.Total = len(filteredObjects)
 	}
 
-	// If we get here, the response didn't match any expected format
-	if c.debug && c.logger != nil {
-		c.logger.Debug("Response didn't match any expected format")
-	}
-
-	// Return empty response
-	return &SearchResponse{
-		Data:       []Object{},
-		Pagination: Pagination{Total: 0, Limit: params.Limit, Offset: params.Offset},
-	}, nil
+	return &response, nil
 }
 
 // GetObject retrieves a specific object by ID
@@ -584,72 +457,20 @@ func (c *Client) GetObject(ctx context.Context, spaceID, objectID string) (*Obje
 		return nil, fmt.Errorf("failed to get object %s: %w", objectID, err)
 	}
 
-	// First try to unmarshal with a wrapper structure to handle nested response format
+	// According to Swagger, the response is structured with an "object" field
+	// containing the Object data - this matches the object.ObjectResponse schema
 	var objectResponse struct {
 		Object Object `json:"object"`
 	}
-	if err := json.Unmarshal(data, &objectResponse); err == nil {
-		// Successfully parsed with wrapper structure
-		return &objectResponse.Object, nil
-	}
 
-	// If that didn't work, try direct unmarshaling
-	var object Object
-	if err := json.Unmarshal(data, &object); err != nil {
+	if err := json.Unmarshal(data, &objectResponse); err != nil {
 		return nil, fmt.Errorf("failed to parse object response: %w", err)
 	}
 
-	// Extract tags from the Relations field if present
-	if tags, ok := object.Relations["tags"]; ok {
-		// Extract tags based on different possible formats
-		switch v := tags.(type) {
-		case []interface{}:
-			// Handle array of tags
-			object.Tags = make([]string, 0, len(v))
-			for _, tag := range v {
-				switch t := tag.(type) {
-				case string:
-					object.Tags = append(object.Tags, t)
-				case map[string]interface{}:
-					// Handle case where tag might be an object with a name field
-					if name, ok := t["name"].(string); ok {
-						object.Tags = append(object.Tags, name)
-					}
-				}
-			}
-		case []string:
-			// Handle string array directly
-			object.Tags = v
-		case string:
-			// Handle single tag as string
-			object.Tags = []string{v}
-		case map[string]interface{}:
-			// Handle case where the whole tags field is a single object
-			if name, ok := v["name"].(string); ok {
-				object.Tags = []string{name}
-			}
-		}
-	}
+	// Extract tags from the retrieved object
+	extractTags(&objectResponse.Object)
 
-	// Make sure Tags is at least an empty slice, not nil
-	if object.Tags == nil {
-		object.Tags = []string{}
-	}
-
-	// Extract tags from properties array if present
-	if len(object.Properties) > 0 {
-		for _, prop := range object.Properties {
-			if prop.Name == "Tag" && prop.Format == "multi_select" && len(prop.MultiSelect) > 0 {
-				for _, tag := range prop.MultiSelect {
-					if tag.Name != "" {
-						object.Tags = append(object.Tags, tag.Name)
-					}
-				}
-			}
-		}
-	}
-
-	return &object, nil
+	return &objectResponse.Object, nil
 }
 
 // CreateObject creates a new object in a space
@@ -683,62 +504,20 @@ func (c *Client) CreateObject(ctx context.Context, spaceID string, object *Objec
 		return nil, fmt.Errorf("failed to create object: %w", err)
 	}
 
-	var created Object
-	if err := json.Unmarshal(data, &created); err != nil {
+	// According to Swagger, the response is structured with an "object" field
+	// containing the Object data - this matches the object.ObjectResponse schema
+	var objectResponse struct {
+		Object Object `json:"object"`
+	}
+
+	if err := json.Unmarshal(data, &objectResponse); err != nil {
 		return nil, fmt.Errorf("failed to parse created object response: %w", err)
 	}
 
-	// Extract tags from the Relations field and properties to ensure consistency
-	if tags, ok := created.Relations["tags"]; ok {
-		// Extract tags based on different possible formats
-		switch v := tags.(type) {
-		case []interface{}:
-			// Handle array of tags
-			created.Tags = make([]string, 0, len(v))
-			for _, tag := range v {
-				switch t := tag.(type) {
-				case string:
-					created.Tags = append(created.Tags, t)
-				case map[string]interface{}:
-					// Handle case where tag might be an object with a name field
-					if name, ok := t["name"].(string); ok {
-						created.Tags = append(created.Tags, name)
-					}
-				}
-			}
-		case []string:
-			// Handle string array directly
-			created.Tags = v
-		case string:
-			// Handle single tag as string
-			created.Tags = []string{v}
-		case map[string]interface{}:
-			// Handle case where the whole tags field is a single object
-			if name, ok := v["name"].(string); ok {
-				created.Tags = []string{name}
-			}
-		}
-	}
+	// Extract tags using the helper function
+	extractTags(&objectResponse.Object)
 
-	// Make sure Tags is at least an empty slice, not nil
-	if created.Tags == nil {
-		created.Tags = []string{}
-	}
-
-	// Extract tags from properties array if present
-	if len(created.Properties) > 0 {
-		for _, prop := range created.Properties {
-			if prop.Name == "Tag" && prop.Format == "multi_select" && len(prop.MultiSelect) > 0 {
-				for _, tag := range prop.MultiSelect {
-					if tag.Name != "" {
-						created.Tags = append(created.Tags, tag.Name)
-					}
-				}
-			}
-		}
-	}
-
-	return &created, nil
+	return &objectResponse.Object, nil
 }
 
 // DeleteObject deletes an object from a space
