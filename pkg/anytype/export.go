@@ -106,6 +106,22 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 		return "", fmt.Errorf("failed to get object content: %w", err)
 	}
 
+	// Process images in the content (download them and update references)
+	if format == "markdown" {
+		if c.logger != nil {
+			c.logger.Debug("Processing images in markdown content")
+		}
+		processedContent, err := c.ProcessMarkdownImages(ctx, content, exportPath)
+		if err != nil {
+			// Log the error but continue with the original content
+			if c.logger != nil {
+				c.logger.Error("Failed to process images: %v", err)
+			}
+		} else {
+			content = processedContent
+		}
+	}
+
 	// Write content to file
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return "", fmt.Errorf("failed to write to file: %w", err)
