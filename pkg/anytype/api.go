@@ -17,41 +17,22 @@ const (
 
 // extractTags is a helper function to extract tags from an object's Relations and Properties
 func extractTags(obj *Object) {
-	// Extract tags from the Relations field if present
-	if tags, ok := obj.Relations["tags"]; ok {
-		// Extract tags based on different possible formats
-		switch v := tags.(type) {
-		case []interface{}:
-			// Handle array of tags
-			obj.Tags = make([]string, 0, len(v))
-			for _, tag := range v {
-				switch t := tag.(type) {
-				case string:
-					obj.Tags = append(obj.Tags, t)
-				case map[string]interface{}:
-					// Handle case where tag might be an object with a name field
-					if name, ok := t["name"].(string); ok {
-						obj.Tags = append(obj.Tags, name)
-					}
-				}
-			}
-		case []string:
-			// Handle string array directly
-			obj.Tags = v
-		case string:
-			// Handle single tag as string
-			obj.Tags = []string{v}
-		case map[string]interface{}:
-			// Handle case where the whole tags field is a single object
-			if name, ok := v["name"].(string); ok {
-				obj.Tags = []string{name}
-			}
-		}
-	}
-
-	// Make sure Tags is at least an empty slice, not nil
+	// Initialize Tags as an empty slice if nil
 	if obj.Tags == nil {
 		obj.Tags = []string{}
+	}
+
+	// Extract tags from the Relations field if present
+	if obj.Relations != nil && obj.Relations.Items != nil {
+		// Check if there are any relations of type "tags"
+		if tagRelations, ok := obj.Relations.Items["tags"]; ok && len(tagRelations) > 0 {
+			// Extract name from each relation
+			for _, relation := range tagRelations {
+				if relation.Name != "" {
+					obj.Tags = append(obj.Tags, relation.Name)
+				}
+			}
+		}
 	}
 
 	// Extract tags from properties array if present
@@ -65,16 +46,6 @@ func extractTags(obj *Object) {
 				}
 			}
 		}
-	}
-}
-
-// wrapError creates a new Error with context
-func wrapError(path string, statusCode int, message string, err error) *Error {
-	return &Error{
-		StatusCode: statusCode,
-		Message:    message,
-		Path:       path,
-		Err:        err,
 	}
 }
 
@@ -474,9 +445,21 @@ func (c *Client) CreateObject(ctx context.Context, spaceID string, object *Objec
 	// Ensure we add tags to Relations if they're specified in the Tags field
 	if len(object.Tags) > 0 {
 		if object.Relations == nil {
-			object.Relations = make(map[string]interface{})
+			object.Relations = &Relations{
+				Items: make(map[string][]Relation),
+			}
 		}
-		object.Relations["tags"] = object.Tags
+
+		// Create tag relations from tag names
+		tagRelations := make([]Relation, 0, len(object.Tags))
+		for _, tagName := range object.Tags {
+			tagRelations = append(tagRelations, Relation{
+				Name: tagName,
+			})
+		}
+
+		// Add to the relations map
+		object.Relations.Items["tags"] = tagRelations
 	}
 
 	path := fmt.Sprintf("/v1/spaces/%s/objects", spaceID)
@@ -542,9 +525,21 @@ func (c *Client) UpdateObject(ctx context.Context, spaceID, objectID string, obj
 	// Ensure we add tags to Relations if they're specified in the Tags field
 	if len(object.Tags) > 0 {
 		if object.Relations == nil {
-			object.Relations = make(map[string]interface{})
+			object.Relations = &Relations{
+				Items: make(map[string][]Relation),
+			}
 		}
-		object.Relations["tags"] = object.Tags
+
+		// Create tag relations from tag names
+		tagRelations := make([]Relation, 0, len(object.Tags))
+		for _, tagName := range object.Tags {
+			tagRelations = append(tagRelations, Relation{
+				Name: tagName,
+			})
+		}
+
+		// Add to the relations map
+		object.Relations.Items["tags"] = tagRelations
 	}
 
 	path := fmt.Sprintf("/v1/spaces/%s/objects/%s", spaceID, objectID)

@@ -174,22 +174,36 @@ type (
 		Select      *PropertyTag  `json:"select,omitempty"`       // Single select value
 	}
 
+	// Relation represents a relation to another object
+	// Mapping from ID to related object
+	Relation struct {
+		ID      string `json:"id,omitempty"`       // ID of the related object
+		Name    string `json:"name,omitempty"`     // Name of the related object
+		TypeKey string `json:"type_key,omitempty"` // Type key of the related object
+		Snippet string `json:"snippet,omitempty"`  // Snippet of the related object content
+	}
+
+	// Relations groups multiple relations by relation type
+	Relations struct {
+		Items map[string][]Relation `json:"items,omitempty"` // Map of relation type to related objects
+	}
+
 	// Object represents an object in a space
 	// Matches the object.Object schema in the API documentation
 	Object struct {
-		Object     string                 `json:"object,omitempty"`     // Data model, e.g. "object"
-		ID         string                 `json:"id,omitempty"`         // Unique ID of the object
-		Name       string                 `json:"name,omitempty"`       // Display name of the object
-		Type       *TypeInfo              `json:"type,omitempty"`       // Type information
-		Icon       *Icon                  `json:"icon,omitempty"`       // Object icon
-		Archived   bool                   `json:"archived,omitempty"`   // Whether the object is archived
-		SpaceID    string                 `json:"space_id,omitempty"`   // ID of the space the object belongs to
-		Snippet    string                 `json:"snippet,omitempty"`    // Preview/snippet of the object content
-		Layout     string                 `json:"layout,omitempty"`     // Layout of the object e.g. "basic"
-		Blocks     []Block                `json:"blocks,omitempty"`     // Content blocks of the object
-		Relations  map[string]interface{} `json:"relations,omitempty"`  // Relations/links to other objects
-		Properties []Property             `json:"properties,omitempty"` // Properties/metadata of the object
-		Tags       []string               `json:"-"`                    // Tags is a client-side representation for convenience
+		Object     string     `json:"object,omitempty"`     // Data model, e.g. "object"
+		ID         string     `json:"id,omitempty"`         // Unique ID of the object
+		Name       string     `json:"name,omitempty"`       // Display name of the object
+		Type       *TypeInfo  `json:"type,omitempty"`       // Type information
+		Icon       *Icon      `json:"icon,omitempty"`       // Object icon
+		Archived   bool       `json:"archived,omitempty"`   // Whether the object is archived
+		SpaceID    string     `json:"space_id,omitempty"`   // ID of the space the object belongs to
+		Snippet    string     `json:"snippet,omitempty"`    // Preview/snippet of the object content
+		Layout     string     `json:"layout,omitempty"`     // Layout of the object e.g. "basic"
+		Blocks     []Block    `json:"blocks,omitempty"`     // Content blocks of the object
+		Relations  *Relations `json:"relations,omitempty"`  // Relations/links to other objects
+		Properties []Property `json:"properties,omitempty"` // Properties/metadata of the object
+		Tags       []string   `json:"-"`                    // Tags is a client-side representation for convenience
 	}
 
 	// SearchParams represents search parameters
@@ -394,12 +408,81 @@ func NewSearchParams() *SearchParams {
 	}
 }
 
+// UnmarshalJSON implements custom JSON unmarshaling for Relations
+func (r *Relations) UnmarshalJSON(data []byte) error {
+	// First try to unmarshal directly if it's in the expected format
+	type Alias Relations
+	if err := json.Unmarshal(data, (*Alias)(r)); err == nil {
+		return nil
+	}
+
+	// If direct unmarshaling fails, it might be the old format (map[string]interface{})
+	var rawMap map[string]interface{}
+	if err := json.Unmarshal(data, &rawMap); err != nil {
+		return err
+	}
+
+	// Initialize the Items map if needed
+	if r.Items == nil {
+		r.Items = make(map[string][]Relation)
+	}
+
+	// Process each relation type
+	for relType, relList := range rawMap {
+		// Skip non-array values
+		relArray, ok := relList.([]interface{})
+		if !ok {
+			continue
+		}
+
+		// Process each relation in this type
+		relations := make([]Relation, 0, len(relArray))
+		for _, relRaw := range relArray {
+			relMap, ok := relRaw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			rel := Relation{}
+
+			// Extract ID
+			if id, ok := relMap["id"].(string); ok {
+				rel.ID = id
+			}
+
+			// Extract Name
+			if name, ok := relMap["name"].(string); ok {
+				rel.Name = name
+			}
+
+			// Extract TypeKey
+			if typeKey, ok := relMap["type_key"].(string); ok {
+				rel.TypeKey = typeKey
+			}
+
+			// Extract Snippet
+			if snippet, ok := relMap["snippet"].(string); ok {
+				rel.Snippet = snippet
+			}
+
+			relations = append(relations, rel)
+		}
+
+		if len(relations) > 0 {
+			r.Items[relType] = relations
+		}
+	}
+
+	return nil
+}
+
 // UnmarshalJSON implements custom JSON unmarshaling for Object
 func (o *Object) UnmarshalJSON(data []byte) error {
 	type Alias Object
 	aux := &struct {
 		*Alias
-		Details []struct {
+		RawRelations map[string]interface{} `json:"relations,omitempty"`
+		Details      []struct {
 			ID      string `json:"id"`
 			Details struct {
 				Tags []struct {
@@ -424,6 +507,23 @@ func (o *Object) UnmarshalJSON(data []byte) error {
 				o.Tags = append(o.Tags, tag.Name)
 			}
 			break
+		}
+	}
+
+	// Handle relations if they exist in the raw data
+	if len(aux.RawRelations) > 0 {
+		// Create a new Relations object if none exists
+		if o.Relations == nil {
+			o.Relations = &Relations{
+				Items: make(map[string][]Relation),
+			}
+		}
+
+		// Marshal the raw relations back to JSON
+		relationsJSON, err := json.Marshal(aux.RawRelations)
+		if err == nil {
+			// Unmarshal using the Relations.UnmarshalJSON method
+			_ = o.Relations.UnmarshalJSON(relationsJSON)
 		}
 	}
 

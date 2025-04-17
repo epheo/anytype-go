@@ -58,6 +58,17 @@ func (e *Error) Unwrap() error {
 	return e.Err
 }
 
+// wrapError creates a new Error with context ---- TO BE REMOVED and replaced with WrapError
+// Deprecated: Use WrapError instead
+func wrapError(path string, statusCode int, message string, err error) *Error {
+	return &Error{
+		StatusCode: statusCode,
+		Message:    message,
+		Path:       path,
+		Err:        err,
+	}
+}
+
 // WrapError creates a new Error with context
 func WrapError(path string, statusCode int, message string, err error) *Error {
 	return &Error{
