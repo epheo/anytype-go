@@ -217,7 +217,7 @@ func (c *Client) GetTypeName(ctx context.Context, spaceID, typeKey string) strin
 
 		// Update cache with all types
 		for _, t := range types.Data {
-			c.typeCache[spaceID][t.UniqueKey] = t.Name
+			c.typeCache[spaceID][t.Key] = t.Name
 		}
 	}
 

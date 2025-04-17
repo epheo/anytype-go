@@ -191,11 +191,11 @@ func run() error {
 	if f.query != "" || f.tags != "" || f.typeName != "" || f.types != "" {
 		searchParams := &anytype.SearchParams{
 			Query: strings.TrimSpace(f.query),
-			Types: []string{"ot-page"}, // Default to ot-page type
 			Limit: 100,
 		}
 
 		// Process type filters (priority given to -types over -type for backwards compatibility)
+		typesSpecified := false
 		if f.types != "" {
 			// Handle multiple types
 			typeNames := strings.Split(f.types, ",")
@@ -212,24 +212,41 @@ func run() error {
 				if err != nil {
 					printer.PrintError("Could not find type '%s': %v", typeName, err)
 				} else {
-					typeKeys = append(typeKeys, typeKey)
-					typeNamesFound = append(typeNamesFound, typeName)
+					// Only add non-empty type keys
+					if typeKey != "" {
+						typeKeys = append(typeKeys, typeKey)
+						typeNamesFound = append(typeNamesFound, typeName)
+					} else {
+						printer.PrintError("Type key for '%s' resolved to an empty string, skipping", typeName)
+					}
 				}
 			}
 
 			if len(typeKeys) > 0 {
 				searchParams.Types = typeKeys
 				printer.PrintInfo("Filtering search results by types: %s", strings.Join(typeNamesFound, ", "))
+				typesSpecified = true
+			} else {
+				printer.PrintInfo("No valid type keys found, proceeding with search without type filtering")
 			}
 		} else if f.typeName != "" {
 			// For backward compatibility: handle single type
 			typeKey, err := client.GetTypeByName(ctx, targetSpace.ID, f.typeName)
 			if err != nil {
 				printer.PrintError("Could not find type '%s': %v", f.typeName, err)
-			} else {
+			} else if typeKey != "" {
 				searchParams.Types = []string{typeKey}
 				printer.PrintInfo("Filtering search results by type: %s", f.typeName)
+				typesSpecified = true
+			} else {
+				printer.PrintError("Type key for '%s' resolved to an empty string, proceeding without type filtering", f.typeName)
 			}
+		}
+
+		// If no valid types were found, use the default page type
+		if !typesSpecified {
+			// Don't include types in search to avoid filter issues
+			printer.PrintInfo("Proceeding with search without type filtering")
 		}
 
 		// Add tags filter if tags are specified

@@ -185,9 +185,16 @@ func (p *printer) PrintObjects(label string, objects []anytype.Object, client *a
 		// Format the display name with fixed-width icon space
 		var displayName string
 		// Normalize the icon (ensure it's not nil and handle special cases)
-		icon := obj.Icon
+		var iconStr string
+		if obj.Icon != nil {
+			if obj.Icon.Emoji != "" {
+				iconStr = obj.Icon.Emoji
+			} else if obj.Icon.Name != "" {
+				iconStr = obj.Icon.Name
+			}
+		}
 		// Use GetPaddedIcon to ensure consistent spacing regardless of icon presence or type
-		paddedIcon := GetPaddedIcon(icon, iconFixedWidth)
+		paddedIcon := GetPaddedIcon(iconStr, iconFixedWidth)
 		displayName = fmt.Sprintf("%s%s", paddedIcon, name)
 
 		// Truncate name if too long
@@ -196,9 +203,14 @@ func (p *printer) PrintObjects(label string, objects []anytype.Object, client *a
 		}
 
 		// Get friendly type name
-		typeName := obj.Type
-		if client != nil {
-			typeName = client.GetTypeName(ctx, obj.SpaceID, obj.Type)
+		var typeNameStr string
+		if obj.Type != nil {
+			typeNameStr = obj.Type.Name
+			if client != nil && obj.Type.Key != "" {
+				typeNameStr = client.GetTypeName(ctx, obj.SpaceID, obj.Type.Key)
+			}
+		} else {
+			typeNameStr = "Unknown"
 		}
 
 		layout := obj.Layout
@@ -215,7 +227,7 @@ func (p *printer) PrintObjects(label string, objects []anytype.Object, client *a
 			}
 		}
 
-		table.Append([]string{displayName, typeName, layout, tags})
+		table.Append([]string{displayName, typeNameStr, layout, tags})
 	}
 
 	fmt.Fprintf(p.writer, "\n%s:\n", label)

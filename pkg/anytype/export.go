@@ -2,8 +2,8 @@ package anytype
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +11,7 @@ import (
 )
 
 // SupportedExportFormats defines the available export formats
-var SupportedExportFormats = []string{"md", "markdown", "html"}
+var SupportedExportFormats = []string{"markdown", "md"}
 
 // ExportObject exports an object's content to a file in the specified format
 func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath, format string) (string, error) {
@@ -27,8 +27,10 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 
 	// Normalize format
 	format = strings.ToLower(format)
-	if format == "markdown" {
-		format = "md" // Normalize markdown to md
+
+	// Convert "md" to "markdown" for API calls
+	if format == "md" {
+		format = "markdown"
 	}
 
 	// Validate format
@@ -40,7 +42,7 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 		}
 	}
 	if !validFormat {
-		return "", fmt.Errorf("unsupported export format: %s", format)
+		return "", fmt.Errorf("unsupported export format: %s (only 'markdown' or 'md' is currently supported)", format)
 	}
 
 	// Get the object to get its metadata
@@ -55,15 +57,38 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 		return "", fmt.Errorf("failed to create export directory: %w", err)
 	}
 
+	// Log debug information about the object
+	if c.logger != nil {
+		c.logger.Debug("Exporting object - ID: %s, Name: %s, Type: %s",
+			object.ID, object.Name, object.Type)
+	}
+
 	// Sanitize object name for file system use
-	sanitizedName := sanitizeFilename(object.Name)
+	var sanitizedName string
+	if object.Name != "" {
+		sanitizedName = sanitizeFilename(object.Name)
+		// Convert spaces to hyphens and ensure filename is clean
+		sanitizedName = strings.ReplaceAll(sanitizedName, " ", "-")
+		// Remove consecutive hyphens
+		for strings.Contains(sanitizedName, "--") {
+			sanitizedName = strings.ReplaceAll(sanitizedName, "--", "-")
+		}
+		// Remove any leading or trailing hyphens
+		sanitizedName = strings.Trim(sanitizedName, "-")
+	}
+
+	// Use object ID as fallback only if name is empty or becomes empty after sanitization
 	if sanitizedName == "" {
-		sanitizedName = fmt.Sprintf("object_%s", objectID)
+		sanitizedName = fmt.Sprintf("object-%s", objectID)
 	}
 
 	// Construct file path with timestamp to avoid overwriting
 	timestamp := time.Now().Format("20060102_150405")
-	filename := fmt.Sprintf("%s_%s.%s", sanitizedName, timestamp, format)
+	filenameFormat := "md"
+	if format != "markdown" {
+		filenameFormat = format
+	}
+	filename := fmt.Sprintf("%s_%s.%s", sanitizedName, timestamp, filenameFormat)
 	filePath := filepath.Join(exportPath, filename)
 
 	// Get object content in the requested format
@@ -73,7 +98,7 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 	}
 
 	// Write content to file
-	if err := ioutil.WriteFile(filePath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return "", fmt.Errorf("failed to write to file: %w", err)
 	}
 
@@ -99,12 +124,20 @@ func sanitizeFilename(name string) string {
 
 // getObjectContent retrieves the content of an object in the specified format
 func (c *Client) getObjectContent(ctx context.Context, spaceID, objectID, format string) (string, error) {
-	// Construct API path for content export
-	path := fmt.Sprintf("/v1/spaces/%s/objects/%s/export?format=%s", spaceID, objectID, format)
+	// Construct API path for content export based on the API documentation
+	// The API endpoint is /v1/spaces/{space_id}/objects/{object_id}/{format}
+	path := fmt.Sprintf("/v1/spaces/%s/objects/%s/%s", spaceID, objectID, format)
 
 	// Make API request
 	data, err := c.makeRequest(ctx, "GET", path, nil)
 	if err != nil {
+		// If the export endpoint returned a 404, try to extract content from the regular object GET endpoint
+		if strings.Contains(err.Error(), "returned status 404") {
+			if c.logger != nil {
+				c.logger.Debug("Export endpoint returned 404, trying to extract content from regular object endpoint")
+			}
+			return c.extractObjectContentFromRegularEndpoint(ctx, spaceID, objectID)
+		}
 		return "", fmt.Errorf("failed to export object %s: %w", objectID, err)
 	}
 
@@ -113,8 +146,77 @@ func (c *Client) getObjectContent(ctx context.Context, spaceID, objectID, format
 		return "", fmt.Errorf("received empty response for object %s", objectID)
 	}
 
-	// Parse the response - content should be directly in the response body
+	// Try to parse the response as JSON first
+	var response struct {
+		Markdown string `json:"markdown"`
+		Content  string `json:"content"`
+	}
+
+	if err := json.Unmarshal(data, &response); err == nil {
+		// Successfully parsed as JSON
+		if response.Markdown != "" {
+			return response.Markdown, nil
+		}
+		if response.Content != "" {
+			return response.Content, nil
+		}
+	}
+
+	// If JSON parsing fails or no content/markdown field found,
+	// return the raw data as a string (the API might return raw markdown)
 	return string(data), nil
+}
+
+// extractObjectContentFromRegularEndpoint tries to get the content from the regular object endpoint
+// and format it as markdown as a fallback when the export endpoint doesn't work
+func (c *Client) extractObjectContentFromRegularEndpoint(ctx context.Context, spaceID, objectID string) (string, error) {
+	// Get the object's full details from the regular endpoint
+	obj, err := c.GetObject(ctx, spaceID, objectID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get object details: %w", err)
+	}
+
+	// Build a proper markdown representation from the object's data
+	var sb strings.Builder
+
+	// Add title with icon if available
+	if obj.Name != "" {
+		if obj.Icon != nil {
+			var iconDisplay string
+			if obj.Icon.Emoji != "" {
+				iconDisplay = obj.Icon.Emoji
+			} else if obj.Icon.Name != "" {
+				iconDisplay = obj.Icon.Name
+			}
+			if iconDisplay != "" {
+				sb.WriteString(fmt.Sprintf("# %s %s\n\n", iconDisplay, obj.Name))
+			} else {
+				sb.WriteString(fmt.Sprintf("# %s\n\n", obj.Name))
+			}
+		} else {
+			sb.WriteString(fmt.Sprintf("# %s\n\n", obj.Name))
+		}
+	}
+
+	// Add tags if available
+	if len(obj.Tags) > 0 {
+		sb.WriteString(fmt.Sprintf("**Tags:** %s\n\n", strings.Join(obj.Tags, ", ")))
+	}
+
+	// Add snippet as content
+	if obj.Snippet != "" {
+		sb.WriteString(obj.Snippet)
+		sb.WriteString("\n\n")
+	}
+
+	// Add metadata in a discreet way at the bottom
+	sb.WriteString("---\n")
+	sb.WriteString(fmt.Sprintf("Type: %s  \n", obj.Type))
+	if obj.Layout != "" {
+		sb.WriteString(fmt.Sprintf("Layout: %s  \n", obj.Layout))
+	}
+
+	return sb.String(), nil
 }
 
 // ExportObjects exports multiple objects to files
