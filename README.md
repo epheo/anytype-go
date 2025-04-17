@@ -1,23 +1,27 @@
 # Anytype-Go
 
-A Go SDK and command-line tool for interacting with the Anytype API to manage spaces, objects, and perform searches.
+[![Go Report Card](https://goreportcard.com/badge/github.com/epheo/anytype-go)](https://goreportcard.com/report/github.com/epheo/anytype-go)
+[![GoDoc](https://godoc.org/github.com/epheo/anytype-go?status.svg)](https://godoc.org/github.com/epheo/anytype-go)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-## Usage as a CLI Tool
+A Go SDK and command-line tool for interacting with the [Anytype](https://anytype.io) API to manage spaces, objects, and perform searches.
 
-### Installation
+## 📚 Usage as a CLI Tool
+
+### 🔧 Installation
 
 ```bash
 go install github.com/epheo/anytype-go@latest
 ```
 
-### Configuration
+### ⚙️ Configuration
 
 The tool stores authentication configuration in:
 `~/.config/anytype-go/anytype_auth.json`
 
 On first run, it will guide you through the authentication process.
 
-### Command Line Usage
+### 💻 Command Line Usage
 
 ```bash
 # Basic usage with text output
@@ -69,7 +73,7 @@ anytype-go -timeout 60s
 anytype-go -no-color
 ```
 
-### Command Line Options
+### 🎛️ Command Line Options
 
 - `-format`: Output format (text or json) [default: text]
 - `-no-color`: Disable colored output
@@ -86,11 +90,11 @@ anytype-go -no-color
 - `-export-path`: Path to export files to [default: ./exports]
 - `-export-format`: Format to export objects as (md, html) [default: md]
 
-## Usage as a Go Package
+## 📦 Usage as a Go Package
 
 The `anytype-go` project can be used as a Go package in your own applications to interact with the Anytype API.
 
-### Installation
+### 📥 Installation
 
 ```bash
 go get github.com/epheo/anytype-go
@@ -203,21 +207,18 @@ The `auth` package handles authentication with the Anytype API:
 - `GetConfiguration()`: Get the saved authentication configuration
 - `AuthenticateInteractive()`: Perform interactive authentication
 
-## Features
+## ✨ Features
 
-- Authentication management with automatic token refresh
-- List available spaces
-- Search for objects within spaces
-- Filter searches by object type (uses type's unique key internally)
-- Colored terminal output
-- Debug mode for API requestsxt or JSON format
-- Configurable operation timeout
-- Export objects to files in different formats
-- Configurable operation timeout
+- 🔐 Authentication management with automatic token refresh
+- 📋 List available spaces
+- 🔍 Search for objects within spaces
+- 🏷️ Filter searches by object type (uses type's unique key internally)
+- 🎨 Colored terminal output
+- 🐞 Debug mode for API requests
+- ⏱️ Configurable operation timeout
+- 📤 Export objects to files in different formats
 
-## Development
-
-### Project Structure
+### 📁 Project Structure
 
 ```
 cmd/
@@ -237,16 +238,10 @@ internal/
   display/           # Output formatting (for internal use only)
 ```
 
-### Building
+### 🔨 Building
 
 ```bash
 go build ./cmd/anytype-go
-```
-
-### Running Tests
-
-```bash
-go test ./...
 ```
 
 ## Contributing
