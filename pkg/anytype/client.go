@@ -70,15 +70,34 @@ func WithCurl(printCurl bool) ClientOption {
 	}
 }
 
+// WithURL sets the API URL
+func WithURL(url string) ClientOption {
+	return func(c *Client) {
+		c.apiURL = url
+	}
+}
+
+// WithToken sets the session token
+func WithToken(token string) ClientOption {
+	return func(c *Client) {
+		c.sessionToken = token
+	}
+}
+
+// WithAppKey sets the app key
+func WithAppKey(appKey string) ClientOption {
+	return func(c *Client) {
+		c.appKey = appKey
+	}
+}
+
 // NewClient creates a new API client with options
-func NewClient(apiURL, sessionToken, appKey string, opts ...ClientOption) *Client {
+func NewClient(opts ...ClientOption) (*Client, error) {
 	client := &Client{
-		apiURL:       apiURL,
-		sessionToken: sessionToken,
-		appKey:       appKey,
-		httpClient:   &http.Client{Timeout: httpTimeout},
-		debug:        false,
-		typeCache:    make(map[string]map[string]string),
+		apiURL:     "http://localhost:31009", // Default API URL
+		httpClient: &http.Client{Timeout: httpTimeout},
+		debug:      false,
+		typeCache:  make(map[string]map[string]string),
 	}
 
 	// Apply options
@@ -86,7 +105,16 @@ func NewClient(apiURL, sessionToken, appKey string, opts ...ClientOption) *Clien
 		opt(client)
 	}
 
-	return client
+	// Validate required fields
+	if client.apiURL == "" {
+		return nil, fmt.Errorf("API URL is required")
+	}
+
+	if client.appKey == "" {
+		return nil, fmt.Errorf("app key is required")
+	}
+
+	return client, nil
 }
 
 // makeRequest is a helper function to make HTTP requests
@@ -210,7 +238,7 @@ func (c *Client) GetTypeName(ctx context.Context, spaceID, typeKey string) strin
 	// instead of doing it for each type key separately
 	if len(c.typeCache[spaceID]) == 0 {
 		// Fetch all types and update cache
-		types, err := c.GetTypes(ctx, spaceID)
+		types, err := c.GetTypes(ctx, &GetTypesParams{SpaceID: spaceID})
 		if err != nil {
 			return typeKey // Return original key if error
 		}

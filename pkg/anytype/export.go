@@ -51,7 +51,10 @@ func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath
 	}
 
 	// Get the object to get its metadata
-	object, err := c.GetObject(ctx, spaceID, objectID)
+	object, err := c.GetObject(ctx, &GetObjectParams{
+		SpaceID:  spaceID,
+		ObjectID: objectID,
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to get object %s: %w", objectID, err)
 	}
@@ -205,7 +208,10 @@ func (c *Client) getObjectContent(ctx context.Context, spaceID, objectID, format
 // and format it as markdown as a fallback when the export endpoint doesn't work
 func (c *Client) extractObjectContentFromRegularEndpoint(ctx context.Context, spaceID, objectID string) (string, error) {
 	// Get the object's full details from the regular endpoint
-	obj, err := c.GetObject(ctx, spaceID, objectID)
+	obj, err := c.GetObject(ctx, &GetObjectParams{
+		SpaceID:  spaceID,
+		ObjectID: objectID,
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to get object details: %w", err)
 	}

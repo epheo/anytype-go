@@ -192,15 +192,18 @@ func (c *Client) GetSpaceByID(ctx context.Context, spaceID string) (*Space, erro
 }
 
 // GetTypes retrieves types from a space
-func (c *Client) GetTypes(ctx context.Context, spaceID string) (*TypeResponse, error) {
-	if spaceID == "" {
-		return nil, ErrInvalidSpaceID
+func (c *Client) GetTypes(ctx context.Context, params *GetTypesParams) (*TypeResponse, error) {
+	if params == nil {
+		return nil, ErrInvalidParameter
+	}
+	if err := params.Validate(); err != nil {
+		return nil, err
 	}
 
-	path := fmt.Sprintf("/v1/spaces/%s/types", spaceID)
+	path := fmt.Sprintf("/v1/spaces/%s/types", params.SpaceID)
 	data, err := c.makeRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get types for space %s: %w", spaceID, err)
+		return nil, fmt.Errorf("failed to get types for space %s: %w", params.SpaceID, err)
 	}
 
 	// This follows the API's pagination response format for types
@@ -211,13 +214,13 @@ func (c *Client) GetTypes(ctx context.Context, spaceID string) (*TypeResponse, e
 
 	// Update the type cache with the retrieved types
 	// Initialize cache for this space if needed
-	if _, ok := c.typeCache[spaceID]; !ok {
-		c.typeCache[spaceID] = make(map[string]string)
+	if _, ok := c.typeCache[params.SpaceID]; !ok {
+		c.typeCache[params.SpaceID] = make(map[string]string)
 	}
 
 	// Update cache with all types
 	for _, t := range response.Data {
-		c.typeCache[spaceID][t.Key] = t.Name
+		c.typeCache[params.SpaceID][t.Key] = t.Name
 	}
 
 	return &response, nil
@@ -254,7 +257,7 @@ func (c *Client) GetTypeByName(ctx context.Context, spaceID, typeName string) (s
 	}
 
 	// If not in cache, fetch all types and update cache
-	types, err := c.GetTypes(ctx, spaceID)
+	types, err := c.GetTypes(ctx, &GetTypesParams{SpaceID: spaceID})
 	if err != nil {
 		return "", err
 	}
@@ -452,18 +455,18 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 }
 
 // GetObject retrieves a specific object by ID
-func (c *Client) GetObject(ctx context.Context, spaceID, objectID string) (*Object, error) {
-	if spaceID == "" {
-		return nil, ErrInvalidSpaceID
+func (c *Client) GetObject(ctx context.Context, params *GetObjectParams) (*Object, error) {
+	if params == nil {
+		return nil, ErrInvalidParameter
 	}
-	if objectID == "" {
-		return nil, ErrInvalidObjectID
+	if err := params.Validate(); err != nil {
+		return nil, err
 	}
 
-	path := fmt.Sprintf("/v1/spaces/%s/objects/%s", spaceID, objectID)
+	path := fmt.Sprintf("/v1/spaces/%s/objects/%s", params.SpaceID, params.ObjectID)
 	data, err := c.makeRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get object %s: %w", objectID, err)
+		return nil, fmt.Errorf("failed to get object %s: %w", params.ObjectID, err)
 	}
 
 	// The API response is structured with an "object" field

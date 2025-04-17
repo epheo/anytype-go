@@ -70,13 +70,16 @@ func setupClient(f *flags) (*anytype.Client, display.Printer, error) {
 	}
 
 	// Create API client with options
-	client := anytype.NewClient(
-		config.ApiURL,
-		config.SessionToken,
-		config.AppKey,
+	client, err := anytype.NewClient(
+		anytype.WithURL(config.ApiURL),
+		anytype.WithToken(config.SessionToken),
+		anytype.WithAppKey(config.AppKey),
 		anytype.WithDebug(f.debug),
 		anytype.WithCurl(f.curl),
 	)
+	if err != nil {
+		return nil, printer, fmt.Errorf("failed to create API client: %w", err)
+	}
 
 	return client, printer, nil
 }
