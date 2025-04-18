@@ -330,3 +330,8 @@ func (c *Client) GetTypeName(ctx context.Context, spaceID, typeKey string) strin
 	}
 	return typeKey
 }
+
+// Version returns the current version information for the SDK
+func (c *Client) Version() VersionInfo {
+	return GetVersionInfo()
+}

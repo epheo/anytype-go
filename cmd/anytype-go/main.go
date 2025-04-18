@@ -29,6 +29,7 @@ type flags struct {
 	export       bool   // Export objects as files
 	exportPath   string // Path to export files to
 	exportFormat string // Format to export objects as (md, html, etc.)
+	version      bool   // Display version information
 }
 
 // exportOptions defines options for exporting objects
@@ -259,6 +260,13 @@ func run() error {
 	// Parse command line flags
 	f := parseFlags()
 
+	// Check if version flag is set
+	if f.version {
+		versionInfo := anytype.GetVersionInfo()
+		fmt.Printf("Anytype-Go v%s (API version: %s)\n", versionInfo.Version, versionInfo.APIVersion)
+		return nil
+	}
+
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
@@ -324,6 +332,9 @@ func parseFlags() *flags {
 	flag.BoolVar(&f.export, "export", false, "Export objects as files")
 	flag.StringVar(&f.exportPath, "export-path", "./exports", "Path to export files to")
 	flag.StringVar(&f.exportFormat, "export-format", "md", "Format to export objects as (md, html)")
+
+	// Version information
+	flag.BoolVar(&f.version, "version", false, "Display version information")
 
 	flag.Parse()
 

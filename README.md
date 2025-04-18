@@ -27,6 +27,9 @@ On first run, it will guide you through the authentication process.
 # Basic usage with text output
 anytype-go
 
+# Display version information
+anytype-go -version
+
 # Use JSON output format
 anytype-go -format json
 
@@ -89,6 +92,7 @@ anytype-go -no-color
 - `-export`: Export objects as files
 - `-export-path`: Path to export files to [default: ./exports]
 - `-export-format`: Format to export objects as (md, html) [default: md]
+- `-version`: Display version information
 
 ## 📦 Usage as a Go Package
 
@@ -243,6 +247,35 @@ internal/
 
 ```bash
 go build ./cmd/anytype-go
+```
+
+## 📊 Versioning Policy
+
+Anytype-Go follows [Semantic Versioning 2.0.0](https://semver.org/) 
+
+### Semantic Version Format: MAJOR.MINOR.PATCH
+
+- **MAJOR** version increments indicate incompatible API changes
+- **MINOR** version increments indicate new functionality added in a backward-compatible manner
+- **PATCH** version increments indicate backward-compatible bug fixes
+
+### API Stability
+
+- **Public API:** All exported functions, types, and constants are considered part of the public API
+- **Breaking Changes:** Will only occur with a MAJOR version increment and until we reach first major release
+- **Deprecation Policy:** Features will be marked as deprecated for at least one MINOR release before removal in a MAJOR release
+- **Experimental Features:** May be marked with an `Experimental` prefix and do not follow the same stability
+
+### Version Information
+
+You can access the current SDK version programmatically:
+
+```go
+import "github.com/epheo/anytype-go/pkg/anytype"
+
+// Get version info
+versionInfo := anytype.GetVersionInfo()
+fmt.Printf("SDK Version: %s, API Version: %s\n", versionInfo.Version, versionInfo.APIVersion)
 ```
 
 ## Contributing
