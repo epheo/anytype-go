@@ -157,22 +157,18 @@ func (p *printer) PrintObjects(label string, objects []anytype.Object, client *a
 
 	// Pre-fetch type information for all objects in one go if client is available
 	if client != nil && len(objects) > 0 {
-		// We only need to pre-fetch once per space
-		spacesSeen := make(map[string]bool)
-
-		for _, obj := range objects {
-			if obj.SpaceID != "" && !spacesSeen[obj.SpaceID] {
-				// This will populate the type cache for this space with a single API call
-				client.GetTypeName(ctx, obj.SpaceID, "dummy-key")
-				spacesSeen[obj.SpaceID] = true
-			}
-		}
+		prefetchTypeInformation(objects, client, ctx)
 	}
 
 	if p.format == formatJSON {
 		return p.PrintJSON(label, objects)
 	}
 
+	return p.renderObjectTable(label, objects, client, ctx)
+}
+
+// renderObjectTable renders a table of objects
+func (p *printer) renderObjectTable(label string, objects []anytype.Object, client *anytype.Client, ctx context.Context) error {
 	table := tablewriter.NewWriter(p.writer)
 	table.SetHeader([]string{"Name", "Type", "Layout", "Tags"})
 	setupTable(table)
@@ -183,57 +179,7 @@ func (p *printer) PrintObjects(label string, objects []anytype.Object, client *a
 			continue
 		}
 
-		name := obj.Name
-		if name == "" {
-			name = "<no name>"
-		}
-
-		// Format the display name with fixed-width icon space
-		var displayName string
-		// Normalize the icon (ensure it's not nil and handle special cases)
-		var iconStr string
-		if obj.Icon != nil {
-			if obj.Icon.Emoji != "" {
-				iconStr = obj.Icon.Emoji
-			} else if obj.Icon.Name != "" {
-				iconStr = obj.Icon.Name
-			}
-		}
-		// Use GetPaddedIcon to ensure consistent spacing regardless of icon presence or type
-		paddedIcon := GetPaddedIcon(iconStr, iconFixedWidth)
-		displayName = fmt.Sprintf("%s%s", paddedIcon, name)
-
-		// Truncate name if too long
-		if len(displayName) > maxNameLength {
-			displayName = displayName[:maxNameLength-3] + "..."
-		}
-
-		// Get friendly type name
-		var typeNameStr string
-		if obj.Type != nil {
-			typeNameStr = obj.Type.Name
-			if client != nil && obj.Type.Key != "" {
-				typeNameStr = client.GetTypeName(ctx, obj.SpaceID, obj.Type.Key)
-			}
-		} else {
-			typeNameStr = "Unknown"
-		}
-
-		layout := obj.Layout
-		if layout == "" {
-			layout = "-"
-		}
-
-		// Format tags
-		tags := "-"
-		if len(obj.Tags) > 0 {
-			tags = strings.Join(obj.Tags, ", ")
-			if len(tags) > maxTagsLength {
-				tags = tags[:maxTagsLength-3] + "..."
-			}
-		}
-
-		table.Append([]string{displayName, typeNameStr, layout, tags})
+		appendObjectToTable(table, obj, client, ctx)
 	}
 
 	fmt.Fprintf(p.writer, "\n%s:\n", label)

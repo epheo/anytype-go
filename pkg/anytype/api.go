@@ -22,31 +22,53 @@ func extractTags(obj *Object) {
 		obj.Tags = []string{}
 	}
 
-	// Extract tags from the Relations field if present
-	if obj.Relations != nil && obj.Relations.Items != nil {
-		// Check if there are any relations of type "tags"
-		if tagRelations, ok := obj.Relations.Items["tags"]; ok && len(tagRelations) > 0 {
-			// Extract name from each relation
-			for _, relation := range tagRelations {
-				if relation.Name != "" {
-					obj.Tags = append(obj.Tags, relation.Name)
-				}
-			}
-		}
+	extractTagsFromRelations(obj)
+	extractTagsFromProperties(obj)
+}
+
+// extractTagsFromRelations extracts tags from object's Relations field
+func extractTagsFromRelations(obj *Object) {
+	if obj.Relations == nil || obj.Relations.Items == nil {
+		return
 	}
 
-	// Extract tags from properties array if present
-	if len(obj.Properties) > 0 {
-		for _, prop := range obj.Properties {
-			if prop.Name == "Tag" && prop.Format == "multi_select" && len(prop.MultiSelect) > 0 {
-				for _, tag := range prop.MultiSelect {
-					if tag.Name != "" {
-						obj.Tags = append(obj.Tags, tag.Name)
-					}
-				}
+	tagRelations, ok := obj.Relations.Items["tags"]
+	if !ok || len(tagRelations) == 0 {
+		return
+	}
+
+	// Extract name from each relation
+	for _, relation := range tagRelations {
+		if relation.Name != "" {
+			obj.Tags = append(obj.Tags, relation.Name)
+		}
+	}
+}
+
+// extractTagsFromProperties extracts tags from object's Properties array
+func extractTagsFromProperties(obj *Object) {
+	if len(obj.Properties) == 0 {
+		return
+	}
+
+	for _, prop := range obj.Properties {
+		if !isTagProperty(prop) {
+			continue
+		}
+
+		for _, tag := range prop.MultiSelect {
+			if tag.Name != "" {
+				obj.Tags = append(obj.Tags, tag.Name)
 			}
 		}
 	}
+}
+
+// isTagProperty checks if a property is a tag property
+func isTagProperty(prop Property) bool {
+	return prop.Name == "Tag" &&
+		prop.Format == "multi_select" &&
+		len(prop.MultiSelect) > 0
 }
 
 // SearchRequestBody represents the structure of a search request
@@ -198,24 +220,12 @@ func (c *Client) GetTypeByName(ctx context.Context, spaceID, typeName string) (s
 	}
 
 	// Initialize cache for this space if needed
-	if _, ok := c.typeCache[spaceID]; !ok {
-		c.typeCache[spaceID] = make(map[string]string)
-	}
+	c.initializeTypeCache(spaceID)
 
-	// Check if we have a reverse lookup cache for name -> key
-	reverseCache := make(map[string]string)
-
-	// First check if we can build a reverse lookup from existing cache
-	if cache, ok := c.typeCache[spaceID]; ok && len(cache) > 0 {
-		// Build reverse lookup (name -> key) from existing cache (key -> name)
-		for key, name := range cache {
-			reverseCache[name] = key
-		}
-
-		// Check if we already have this type name in our reverse lookup
-		if typeKey, found := reverseCache[typeName]; found {
-			return typeKey, nil
-		}
+	// First try to find from the existing cache
+	reverseCache := c.buildReverseCache(spaceID)
+	if typeKey, found := reverseCache[typeName]; found {
+		return typeKey, nil
 	}
 
 	// If not in cache, fetch all types and update cache
@@ -224,48 +234,110 @@ func (c *Client) GetTypeByName(ctx context.Context, spaceID, typeName string) (s
 		return "", err
 	}
 
-	// Update both caches with all types
-	for _, t := range types.Data {
+	// Update cache with fresh data
+	reverseCache = c.updateTypeCaches(spaceID, types.Data, typeName)
+
+	// Try different matching strategies in order
+	return c.findTypeKeyWithStrategies(ctx, spaceID, typeName, types.Data, reverseCache)
+}
+
+// initializeTypeCache initializes the type cache for a specific space
+func (c *Client) initializeTypeCache(spaceID string) {
+	if _, ok := c.typeCache[spaceID]; !ok {
+		c.typeCache[spaceID] = make(map[string]string)
+	}
+}
+
+// buildReverseCache builds a reverse lookup (name -> key) from existing cache
+func (c *Client) buildReverseCache(spaceID string) map[string]string {
+	reverseCache := make(map[string]string)
+
+	if cache, ok := c.typeCache[spaceID]; ok && len(cache) > 0 {
+		for key, name := range cache {
+			reverseCache[name] = key
+		}
+	}
+
+	return reverseCache
+}
+
+// updateTypeCaches updates both the regular and reverse caches with type data
+func (c *Client) updateTypeCaches(spaceID string, types []TypeInfo, typeName string) map[string]string {
+	reverseCache := make(map[string]string)
+
+	for _, t := range types {
 		c.typeCache[spaceID][t.Key] = t.Name
 		reverseCache[t.Name] = t.Key
 
-		// Also handle special case: "Page" -> "ot-page", "Note" -> "ot-note" etc.
-		// This helps with common type lookups when the name is a common known type
-		if strings.HasPrefix(t.Key, "ot-") && strings.EqualFold(strings.TrimPrefix(t.Key, "ot-"), typeName) {
-			if c.debug && c.logger != nil {
-				c.logger.Debug("Found matching type by key prefix: '%s' -> '%s'", typeName, t.Key)
-			}
+		// Handle special case: "Page" -> "ot-page", "Note" -> "ot-note" etc.
+		if c.isOtPrefixMatch(t.Key, typeName) {
 			reverseCache[typeName] = t.Key
 		}
 	}
 
-	// Now check if we have the type after refreshing the cache
+	return reverseCache
+}
+
+// isOtPrefixMatch checks if a key with "ot-" prefix matches the typeName
+func (c *Client) isOtPrefixMatch(key, typeName string) bool {
+	if strings.HasPrefix(key, "ot-") && strings.EqualFold(strings.TrimPrefix(key, "ot-"), typeName) {
+		if c.debug && c.logger != nil {
+			c.logger.Debug("Found matching type by key prefix: '%s' -> '%s'", typeName, key)
+		}
+		return true
+	}
+	return false
+}
+
+// findTypeKeyWithStrategies tries different strategies to find a type key
+func (c *Client) findTypeKeyWithStrategies(ctx context.Context, spaceID, typeName string,
+	types []TypeInfo, reverseCache map[string]string) (string, error) {
+
+	// Strategy 1: Exact match from updated cache
 	if typeKey, found := reverseCache[typeName]; found {
 		return typeKey, nil
 	}
 
-	// Try case-insensitive matching as fallback if exact match not found
+	// Strategy 2: Case-insensitive matching
+	typeKey := c.findTypeKeyCaseInsensitive(typeName, reverseCache)
+	if typeKey != "" {
+		return typeKey, nil
+	}
+
+	// Strategy 3: Standard key construction (e.g., "Page" -> "ot-page")
+	typeKey = c.findTypeKeyByStandardConstruction(typeName, types)
+	if typeKey != "" {
+		return typeKey, nil
+	}
+
+	return "", fmt.Errorf("type '%s' not found", typeName)
+}
+
+// findTypeKeyCaseInsensitive tries to find a type key using case-insensitive matching
+func (c *Client) findTypeKeyCaseInsensitive(typeName string, reverseCache map[string]string) string {
 	for name, key := range reverseCache {
 		if strings.EqualFold(name, typeName) {
 			if c.debug && c.logger != nil {
 				c.logger.Debug("Found type using case-insensitive match: '%s' -> '%s'", typeName, name)
 			}
-			return key, nil
+			return key
 		}
 	}
+	return ""
+}
 
-	// As a final fallback, try to construct a standard key format (e.g., "Page" -> "ot-page")
+// findTypeKeyByStandardConstruction tries to construct a standard key format
+func (c *Client) findTypeKeyByStandardConstruction(typeName string, types []TypeInfo) string {
 	standardKey := "ot-" + strings.ToLower(typeName)
-	for _, t := range types.Data {
+	for _, t := range types {
 		if t.Key == standardKey {
 			if c.debug && c.logger != nil {
 				c.logger.Debug("Found type using standard key construction: '%s' -> '%s'", typeName, standardKey)
 			}
-			return standardKey, nil
+			return standardKey
 		}
 	}
-
-	return "", fmt.Errorf("type '%s' not found", typeName)
+	return ""
 }
 
 // Search performs a search in a space with the given parameters.
@@ -302,152 +374,7 @@ func (c *Client) GetTypeByName(ctx context.Context, spaceID, typeName string) (s
 //	}
 //
 //	results, err := client.Search(ctx, "space123", params)
-func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParams) (*SearchResponse, error) {
-	if spaceID == "" {
-		return nil, wrapError("/search", 0, "space ID is required", ErrMissingRequired)
-	}
-	if params == nil {
-		params = NewSearchParams()
-	}
-	if err := params.Validate(); err != nil {
-		return nil, wrapError("/search", 0, "invalid search parameters", err)
-	}
-
-	path := fmt.Sprintf("/v1/spaces/%s/search", spaceID)
-
-	// Save the tags for post-filtering
-	requestedTags := params.Tags
-
-	// Create search request body according to API spec
-	requestBody := SearchRequestBody{
-		Query:   params.Query,
-		Limit:   params.Limit,
-		Offset:  params.Offset,
-		SpaceID: spaceID,
-	}
-
-	// Filter out empty type strings before adding to request
-	if len(params.Types) > 0 {
-		typeKeys := make([]string, 0, len(params.Types))
-		for _, t := range params.Types {
-			if t != "" {
-				typeKeys = append(typeKeys, t)
-			}
-		}
-		if len(typeKeys) > 0 {
-			requestBody.Types = typeKeys
-		}
-	}
-
-	// Include tags if present - the API may or may not handle them natively
-	// otherwise we'll filter results afterward
-	if len(requestedTags) > 0 {
-		requestBody.Tags = requestedTags
-	}
-
-	// Set sort options if provided
-	if params.Sort != nil {
-		requestBody.Sort = params.Sort
-	}
-
-	// Increase limit if we're filtering by tags to ensure we get enough matches
-	if len(requestedTags) > 0 && requestBody.Limit < 1000 {
-		if c.debug && c.logger != nil {
-			c.logger.Debug("Increasing search limit for tag filtering: %d -> 1000", requestBody.Limit)
-		}
-		requestBody.Limit = 1000
-	}
-
-	body, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, wrapError("/search", 0, "failed to marshal search params", err)
-	}
-
-	if c.debug && c.logger != nil {
-		c.logger.Debug("Search request body: %s", string(body))
-	}
-
-	data, err := c.makeRequest(ctx, http.MethodPost, path, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, wrapError(path, 0, "failed to perform search", err)
-	}
-
-	if c.debug && c.logger != nil {
-		c.logger.Debug("Raw search response: %s", string(data))
-	}
-
-	// For empty responses, return an empty result
-	if len(data) == 0 || string(data) == "{}" || string(data) == "[]" {
-		if c.debug && c.logger != nil {
-			c.logger.Debug("Empty search response, returning empty result")
-		}
-		return &SearchResponse{
-			Data:       []Object{},
-			Pagination: Pagination{Total: 0, Limit: params.Limit, Offset: params.Offset},
-		}, nil
-	}
-
-	// The API returns search responses in a paginated format
-	// which has a data array of objects and a pagination object
-	var response SearchResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, wrapError(path, 0, "failed to parse search response", err)
-	}
-
-	// Extract tags from all objects
-	for i := range response.Data {
-		extractTags(&response.Data[i])
-		if c.debug && c.logger != nil {
-			c.logger.Debug("Object '%s' has tags: %v", response.Data[i].Name, response.Data[i].Tags)
-		}
-	}
-
-	// Apply tag filtering if requested
-	if len(requestedTags) > 0 {
-		if c.debug && c.logger != nil {
-			c.logger.Debug("Filtering %d objects by tags: %v", len(response.Data), requestedTags)
-		}
-
-		filteredObjects := make([]Object, 0)
-
-		// Filter objects that contain ANY of the requested tags
-		for _, obj := range response.Data {
-			// Check if object has any of the requested tags
-			hasTag := false
-			for _, requestedTag := range requestedTags {
-				for _, objTag := range obj.Tags {
-					if strings.EqualFold(requestedTag, objTag) {
-						hasTag = true
-						if c.debug && c.logger != nil {
-							c.logger.Debug("Object '%s' matches tag '%s' with '%s'", obj.Name, requestedTag, objTag)
-						}
-						break
-					}
-				}
-				if hasTag {
-					break
-				}
-			}
-
-			if hasTag {
-				filteredObjects = append(filteredObjects, obj)
-			} else if c.debug && c.logger != nil {
-				c.logger.Debug("Object '%s' was filtered out, tags: %v", obj.Name, obj.Tags)
-			}
-		}
-
-		// Update the response with filtered objects
-		if c.debug && c.logger != nil {
-			c.logger.Debug("Filtered to %d objects that match tags", len(filteredObjects))
-		}
-
-		// Update pagination info
-		response.Data = filteredObjects
-		response.Pagination.Total = len(filteredObjects)
-	}
-
-	return &response, nil
-}
+// Search function is implemented in search.go
 
 // GetObject retrieves a specific object by ID.
 //
