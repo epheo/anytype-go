@@ -13,7 +13,32 @@ import (
 // The API officially supports only "markdown" format
 var SupportedExportFormats = []string{"markdown"}
 
-// ExportObject exports an object's content to a file in the specified format
+// ExportObject exports a single object to a file in the specified format.
+//
+// This method allows you to export an Anytype object to a file on disk. The object
+// is identified by its ID within a specific space. The exported file will be written
+// to the specified exportPath directory with a filename based on the object's name.
+//
+// The format parameter specifies the output format, which can be "md" (or "markdown")
+// or "html". If an unsupported format is provided, an error will be returned.
+//
+// The method returns the full path to the exported file if successful.
+//
+// Example:
+//
+//	// Export a document as markdown
+//	filePath, err := client.ExportObject(ctx, "space123", "obj456", "./exports", "md")
+//	if err != nil {
+//	    log.Fatalf("Failed to export object: %v", err)
+//	}
+//
+//	fmt.Printf("Object exported to: %s\n", filePath)
+//
+//	// Export a document as HTML
+//	filePath, err := client.ExportObject(ctx, "space123", "obj456", "./exports", "html")
+//	if err != nil {
+//	    log.Fatalf("Failed to export object: %v", err)
+//	}
 func (c *Client) ExportObject(ctx context.Context, spaceID, objectID, exportPath, format string) (string, error) {
 	if spaceID == "" {
 		return "", ErrInvalidSpaceID
@@ -259,7 +284,42 @@ func (c *Client) extractObjectContentFromRegularEndpoint(ctx context.Context, sp
 	return sb.String(), nil
 }
 
-// ExportObjects exports multiple objects to files
+// ExportObjects exports multiple objects to files in the specified format.
+//
+// This method exports a batch of Anytype objects to individual files on disk.
+// Each object is exported using the ExportObject method, which creates a file
+// with a name based on the object's name. If the export of an individual object
+// fails, the error is logged but the process continues with the remaining objects.
+//
+// The format parameter specifies the output format, which can be "md" (or "markdown")
+// or "html". If an unsupported format is provided, an error will be returned.
+//
+// The method returns a slice of file paths for all successfully exported objects.
+// If no objects could be exported, an error is returned.
+//
+// Example:
+//
+//	// Search for objects to export
+//	params := &anytype.SearchParams{
+//	    Query: "project",
+//	    Limit: 10,
+//	}
+//
+//	results, err := client.Search(ctx, "space123", params)
+//	if err != nil {
+//	    log.Fatalf("Search failed: %v", err)
+//	}
+//
+//	// Export all found objects as markdown
+//	exportedFiles, err := client.ExportObjects(ctx, "space123", results.Data, "./exports", "md")
+//	if err != nil {
+//	    log.Fatalf("Failed to export objects: %v", err)
+//	}
+//
+//	fmt.Printf("Exported %d objects:\n", len(exportedFiles))
+//	for i, file := range exportedFiles {
+//	    fmt.Printf("%d. %s\n", i+1, file)
+//	}
 func (c *Client) ExportObjects(ctx context.Context, spaceID string, objects []Object, exportPath, format string) ([]string, error) {
 	if len(objects) == 0 {
 		return nil, fmt.Errorf("no objects to export")

@@ -48,7 +48,24 @@ func main() {
 	}
 }
 
-// setupClient creates and configures the API client
+// setupClient creates and configures the API client and display printer.
+//
+// This function initializes both the Anytype API client and the display printer
+// based on the provided command line flags. It handles:
+//
+// 1. Setting up the display printer with the appropriate format and color options
+// 2. Configuring the logging level based on flags
+// 3. Initializing the authentication manager with appropriate options
+// 4. Setting up the client options (debug mode, timeout, curl output)
+// 5. Creating the client using the auth manager's helper function
+//
+// Parameters:
+//   - f: A pointer to the parsed command line flags
+//
+// Returns:
+//   - An initialized Anytype API client
+//   - A configured display printer for output formatting
+//   - Any error encountered during setup
 func setupClient(f *flags) (*anytype.Client, display.Printer, error) {
 	// Initialize display
 	printer := display.NewPrinter(f.format, !f.noColor, f.debug)
@@ -83,7 +100,25 @@ func setupClient(f *flags) (*anytype.Client, display.Printer, error) {
 	return client, printer, nil
 }
 
-// setupSpaces gets and displays spaces, and finds the target space
+// setupSpaces gets and displays spaces, and finds the target space.
+//
+// This function retrieves all available spaces from the Anytype API, displays them
+// to the user, and then determines which space to use for subsequent operations.
+// If a specific space name is provided, it will look for a space with that name.
+// Otherwise, it will use the first available space.
+//
+// Parameters:
+//   - ctx: Context for the API request
+//   - client: The initialized Anytype API client
+//   - spaceName: Optional name of the space to use (empty string means use first available)
+//   - printer: Display printer for output formatting
+//
+// Returns:
+//   - A pointer to the selected Space
+//   - Any error encountered during the process
+//
+// The function delegates to findTargetSpace to select the appropriate space based
+// on the provided spaceName.
 func setupSpaces(ctx context.Context, client *anytype.Client, spaceName string, printer display.Printer) (*anytype.Space, error) {
 	// Get spaces
 	spaces, err := client.GetSpaces(ctx)
@@ -99,7 +134,24 @@ func setupSpaces(ctx context.Context, client *anytype.Client, spaceName string, 
 	return findTargetSpace(spaces, spaceName, printer)
 }
 
-// findTargetSpace finds the target space based on name or returns the first available
+// findTargetSpace finds the target space based on name or returns the first available.
+//
+// This function searches through the available spaces for one matching the provided
+// spaceName. If a matching space is found, it returns that space. If no match is found
+// and spaces are available, it returns the first space. If no spaces are available,
+// it returns an error.
+//
+// Parameters:
+//   - spaces: Response containing available spaces
+//   - spaceName: Name of the space to look for (can be empty)
+//   - printer: Display printer for output formatting
+//
+// Returns:
+//   - A pointer to the selected Space
+//   - An error if no spaces are available or if a specified space name cannot be found
+//
+// This function is typically called by setupSpaces after retrieving the list of spaces
+// from the Anytype API.
 func findTargetSpace(spaces *anytype.SpacesResponse, spaceName string, printer display.Printer) (*anytype.Space, error) {
 	for _, space := range spaces.Data {
 		if space.Name == spaceName {
@@ -189,7 +241,29 @@ func handleDefaultExport(ctx context.Context, client *anytype.Client, targetSpac
 	return handleSearch(ctx, client, targetSpace, searchParams, printer, exportOpts)
 }
 
-// prepareSearchParams creates and populates a SearchParams object based on command line flags
+// prepareSearchParams creates and populates a SearchParams object based on command line flags.
+//
+// This function constructs a SearchParams object using the search criteria provided
+// in the command line flags. It handles:
+//
+// 1. Setting the text query from the -query flag
+// 2. Processing type filters from either -types (comma-separated) or -type (single)
+// 3. Converting type names to type keys by querying the Anytype API
+// 4. Adding tag filters from the -tags flag
+//
+// The function uses processTypeFilters to resolve type names to internal type keys
+// that the Anytype API requires for filtering.
+//
+// Parameters:
+//   - ctx: Context for the API request
+//   - client: The initialized Anytype API client
+//   - spaceID: ID of the space to search within
+//   - f: Parsed command line flags containing search criteria
+//   - printer: Display printer for output formatting
+//
+// Returns:
+//   - A populated SearchParams object ready for use with the Search API
+//   - Any error encountered during parameter preparation
 func prepareSearchParams(ctx context.Context, client *anytype.Client, spaceID string, f *flags, printer display.Printer) (*anytype.SearchParams, error) {
 	searchParams := &anytype.SearchParams{
 		Query: strings.TrimSpace(f.query),
@@ -244,7 +318,26 @@ func setupExportOptions(f *flags, printer display.Printer) *exportOptions {
 	return exportOpts
 }
 
-// handleSearchCase prepares search parameters and executes the search
+// handleSearchCase prepares search parameters and executes the search.
+//
+// This function handles the search case when user provides search parameters via flags.
+// It first prepares the search parameters based on the command line flags, then delegates
+// to handleSearch to execute the search and process the results, including any export
+// operations if requested.
+//
+// Parameters:
+//   - ctx: Context for the API request
+//   - client: The initialized Anytype API client
+//   - targetSpace: The space to search within
+//   - f: Parsed command line flags containing search criteria
+//   - printer: Display printer for output formatting
+//   - exportOpts: Export options if export is enabled, or nil
+//
+// Returns:
+//   - Any error encountered during search parameter preparation or execution
+//
+// This function is called from the main run() function when search parameters
+// are detected in the command line flags.
 func handleSearchCase(ctx context.Context, client *anytype.Client, targetSpace *anytype.Space, f *flags, printer display.Printer, exportOpts *exportOptions) error {
 	// Prepare search parameters
 	searchParams, err := prepareSearchParams(ctx, client, targetSpace.ID, f, printer)

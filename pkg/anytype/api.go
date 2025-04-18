@@ -74,7 +74,24 @@ type TypeResponse struct {
 	} `json:"pagination"`
 }
 
-// GetSpaces retrieves spaces from the API
+// GetSpaces retrieves all available spaces from the Anytype API.
+//
+// This method fetches all spaces that the authenticated user has access to.
+// For each space, it also attempts to fetch and populate the space's members.
+// If member fetching fails for any space, the error is logged (in debug mode) but
+// the space is still included in the results.
+//
+// Example:
+//
+//	spaces, err := client.GetSpaces(ctx)
+//	if err != nil {
+//	    log.Fatalf("Failed to get spaces: %v", err)
+//	}
+//
+//	fmt.Printf("Found %d spaces:\n", len(spaces.Data))
+//	for _, space := range spaces.Data {
+//	    fmt.Printf("- %s (ID: %s)\n", space.Name, space.ID)
+//	}
 func (c *Client) GetSpaces(ctx context.Context) (*SpacesResponse, error) {
 	data, err := c.makeRequest(ctx, http.MethodGet, "/v1/spaces", nil)
 	if err != nil {
@@ -251,7 +268,40 @@ func (c *Client) GetTypeByName(ctx context.Context, spaceID, typeName string) (s
 	return "", fmt.Errorf("type '%s' not found", typeName)
 }
 
-// Search performs a search in a space with the given parameters
+// Search performs a search in a space with the given parameters.
+//
+// This method allows you to search for objects within a specific space based on various criteria.
+// You can search by text query, filter by object types, and limit the number of results.
+//
+// The spaceID parameter specifies which space to search in. If params is nil, default search
+// parameters will be used. The search results include objects matching the criteria and any
+// related metadata.
+//
+// Tag filtering is performed client-side after retrieving the results from the API.
+//
+// Example:
+//
+//	// Search for notes containing "meeting"
+//	params := &anytype.SearchParams{
+//	    Query: "meeting",
+//	    Types: []string{"ot-note"},
+//	    Limit: 50,
+//	}
+//
+//	results, err := client.Search(ctx, "space123", params)
+//	if err != nil {
+//	    log.Fatalf("Search failed: %v", err)
+//	}
+//
+//	fmt.Printf("Found %d objects matching the search criteria\n", len(results.Data))
+//
+//	// Search with tag filtering
+//	params := &anytype.SearchParams{
+//	    Tags: []string{"important", "work"},
+//	    Limit: 25,
+//	}
+//
+//	results, err := client.Search(ctx, "space123", params)
 func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParams) (*SearchResponse, error) {
 	if spaceID == "" {
 		return nil, wrapError("/search", 0, "space ID is required", ErrMissingRequired)
@@ -399,7 +449,30 @@ func (c *Client) Search(ctx context.Context, spaceID string, params *SearchParam
 	return &response, nil
 }
 
-// GetObject retrieves a specific object by ID
+// GetObject retrieves a specific object by ID.
+//
+// This method fetches an object from Anytype by its unique ID. The object includes
+// metadata such as name, type, icon, tags, and other properties defined in the Object struct.
+//
+// The method requires a valid context and GetObjectParams struct containing the space ID
+// and object ID. If successful, it returns a populated Object struct and nil error.
+//
+// If the object doesn't exist or cannot be fetched due to permissions or network issues,
+// an appropriate error will be returned.
+//
+// Example:
+//
+//	params := &anytype.GetObjectParams{
+//	    SpaceID:  "space123",
+//	    ObjectID: "obj456",
+//	}
+//
+//	object, err := client.GetObject(ctx, params)
+//	if err != nil {
+//	    log.Fatalf("Failed to get object: %v", err)
+//	}
+//
+//	fmt.Printf("Object name: %s\n", object.Name)
 func (c *Client) GetObject(ctx context.Context, params *GetObjectParams) (*Object, error) {
 	if params == nil {
 		return nil, ErrInvalidParameter
@@ -430,7 +503,34 @@ func (c *Client) GetObject(ctx context.Context, params *GetObjectParams) (*Objec
 	return &objectResponse.Object, nil
 }
 
-// CreateObject creates a new object in a space
+// CreateObject creates a new object in a space.
+//
+// This method allows you to create new objects in a specified Anytype space.
+// The object parameter must contain all required fields for the object type,
+// such as name, type key, and any properties specific to that type.
+//
+// If the object contains tags in the Tags field, they will automatically be
+// added to the object's Relations.
+//
+// Example:
+//
+//	// Create a new note
+//	newObject := &anytype.Object{
+//	    Name:    "Meeting Notes",
+//	    TypeKey: "ot-note",
+//	    Icon: &anytype.Icon{
+//	        Format: "emoji",
+//	        Emoji:  "📝",
+//	    },
+//	    Tags: []string{"work", "meeting"},
+//	}
+//
+//	created, err := client.CreateObject(ctx, "space123", newObject)
+//	if err != nil {
+//	    log.Fatalf("Failed to create object: %v", err)
+//	}
+//
+//	fmt.Printf("Created object with ID: %s\n", created.ID)
 func (c *Client) CreateObject(ctx context.Context, spaceID string, object *Object) (*Object, error) {
 	if spaceID == "" {
 		return nil, ErrInvalidSpaceID
@@ -489,7 +589,19 @@ func (c *Client) CreateObject(ctx context.Context, spaceID string, object *Objec
 	return &objectResponse.Object, nil
 }
 
-// DeleteObject deletes an object from a space
+// DeleteObject deletes an object from a space.
+//
+// This method permanently removes an object identified by its objectID from the
+// specified space. Once deleted, the object cannot be recovered through the API.
+//
+// Example:
+//
+//	err := client.DeleteObject(ctx, "space123", "obj456")
+//	if err != nil {
+//	    log.Fatalf("Failed to delete object: %v", err)
+//	}
+//
+//	fmt.Println("Object successfully deleted")
 func (c *Client) DeleteObject(ctx context.Context, spaceID, objectID string) error {
 	if spaceID == "" {
 		return ErrInvalidSpaceID
@@ -507,7 +619,34 @@ func (c *Client) DeleteObject(ctx context.Context, spaceID, objectID string) err
 	return nil
 }
 
-// UpdateObject updates an existing object in a space
+// UpdateObject updates an existing object in a space.
+//
+// This method allows you to update an existing object identified by its objectID
+// within the specified space. The provided object parameter should contain the
+// fields to be updated. The object ID in the object parameter will be overridden
+// with the objectID parameter to ensure consistency.
+//
+// If the object contains tags in the Tags field, they will automatically be
+// added to the object's Relations, replacing any existing tag relations.
+//
+// Example:
+//
+//	// Update an existing object
+//	updateObj := &anytype.Object{
+//	    Name: "Updated Meeting Notes",
+//	    Icon: &anytype.Icon{
+//	        Format: "emoji",
+//	        Emoji:  "📌",
+//	    },
+//	    Tags: []string{"work", "important", "meeting"},
+//	}
+//
+//	updated, err := client.UpdateObject(ctx, "space123", "obj456", updateObj)
+//	if err != nil {
+//	    log.Fatalf("Failed to update object: %v", err)
+//	}
+//
+//	fmt.Printf("Updated object: %s\n", updated.Name)
 func (c *Client) UpdateObject(ctx context.Context, spaceID, objectID string, object *Object) (*Object, error) {
 	if spaceID == "" {
 		return nil, ErrInvalidSpaceID

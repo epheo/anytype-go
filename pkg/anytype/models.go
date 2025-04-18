@@ -5,8 +5,27 @@ import (
 	"time"
 )
 
-// Icon represents an icon in Anytype
-// Matches the util.Icon schema in the API documentation
+// Icon represents an icon in Anytype.
+//
+// Icons can be used for spaces, objects, types, and other entities in Anytype.
+// The icon can be represented as an emoji, a named icon, or an external file.
+// The Format field determines which of the other fields are relevant.
+//
+// Example:
+//
+//	// Create an emoji icon
+//	emojiIcon := &anytype.Icon{
+//	    Format: "emoji",
+//	    Emoji:  "📝",
+//	    Color:  "#4285F4",
+//	}
+//
+//	// Create a named icon
+//	namedIcon := &anytype.Icon{
+//	    Format: "icon",
+//	    Name:   "document",
+//	    Color:  "#34A853",
+//	}
 type Icon struct {
 	Format string `json:"format,omitempty"` // Format of the icon: emoji, file, or icon
 	Emoji  string `json:"emoji,omitempty"`  // Emoji character if format is emoji

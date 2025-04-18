@@ -1,3 +1,8 @@
+// Package anytype provides a Go client for interacting with the Anytype API.
+//
+// It allows developers to manage spaces, objects, types, and perform various operations
+// on Anytype data. This package is the foundation for building applications that
+// integrate with the Anytype ecosystem.
 package anytype
 
 import (
@@ -25,29 +30,56 @@ const (
 	defaultAPIURL = "http://localhost:31009"
 )
 
-// ClientOption defines a function type for client configuration
+// ClientOption defines a function type for client configuration.
+//
+// These options are used with NewClient to customize client behavior.
 type ClientOption func(*Client)
 
-// Client manages API communication
+// Client manages API communication with the Anytype server.
+//
+// Client provides methods to interact with spaces, objects, types, and other
+// Anytype resources. It handles authentication, request formatting, and response
+// parsing to provide a seamless interface to the Anytype API.
 type Client struct {
-	apiURL       string
-	sessionToken string
-	appKey       string
-	httpClient   *http.Client
-	debug        bool
-	printCurl    bool                         // whether to print curl commands
-	typeCache    map[string]map[string]string // spaceID -> typeKey -> typeName
-	logger       log.Logger                   // for logging output
+	apiURL       string                       // The base URL for API requests
+	sessionToken string                       // Authentication session token
+	appKey       string                       // Application key for authentication
+	httpClient   *http.Client                 // HTTP client for making requests
+	debug        bool                         // Whether debug logging is enabled
+	printCurl    bool                         // Whether to print curl commands
+	typeCache    map[string]map[string]string // Cache mapping spaceID -> typeKey -> typeName
+	logger       log.Logger                   // Logger for output
 }
 
-// WithTimeout sets a custom timeout for the HTTP client
+// WithTimeout sets a custom timeout for the HTTP client.
+//
+// The timeout specifies the maximum duration for HTTP requests before they time out.
+// By default, the client uses a 10-second timeout if this option is not specified.
+//
+// Example:
+//
+//	client := anytype.NewClient(
+//	    apiURL, sessionToken, appKey,
+//	    anytype.WithTimeout(30*time.Second),
+//	)
 func WithTimeout(timeout time.Duration) ClientOption {
 	return func(c *Client) {
 		c.httpClient.Timeout = timeout
 	}
 }
 
-// WithDebug enables debug mode for the client
+// WithDebug enables debug mode for the client.
+//
+// When debug mode is enabled, the client will log detailed information about
+// requests and responses to help troubleshoot API interactions. This includes
+// headers, HTTP status codes, and response bodies.
+//
+// Example:
+//
+//	client := anytype.NewClient(
+//	    apiURL, sessionToken, appKey,
+//	    anytype.WithDebug(true),
+//	)
 func WithDebug(debug bool) ClientOption {
 	return func(c *Client) {
 		c.debug = debug
@@ -61,42 +93,121 @@ func WithDebug(debug bool) ClientOption {
 	}
 }
 
-// WithLogger sets a logger for the client
+// WithLogger sets a custom logger for the client.
+//
+// By default, the client uses a basic logger that outputs to stdout.
+// Use this option to provide a custom logger implementation for
+// better integration with your application's logging system.
+//
+// Example:
+//
+//	myLogger := customLogger.New()
+//	client := anytype.NewClient(
+//	    apiURL, sessionToken, appKey,
+//	    anytype.WithLogger(myLogger),
+//	)
 func WithLogger(logger log.Logger) ClientOption {
 	return func(c *Client) {
 		c.logger = logger
 	}
 }
 
-// WithCurl enables printing curl equivalent of API requests
+// WithCurl enables printing curl equivalent of API requests.
+//
+// When enabled, the client will print curl commands equivalent to each API request,
+// which can be useful for debugging or for reproducing requests outside of Go.
+//
+// Example:
+//
+//	client := anytype.NewClient(
+//	    apiURL, sessionToken, appKey,
+//	    anytype.WithCurl(true),
+//	)
 func WithCurl(printCurl bool) ClientOption {
 	return func(c *Client) {
 		c.printCurl = printCurl
 	}
 }
 
-// WithURL sets the API URL
+// WithURL sets the API URL for the client.
+//
+// This overrides the default API URL. Use this when connecting
+// to a non-standard Anytype server or through a proxy.
+//
+// Example:
+//
+//	client := anytype.NewClient(
+//	    "", sessionToken, appKey, // Empty URL will be overridden
+//	    anytype.WithURL("https://custom-anytype-server.com"),
+//	)
 func WithURL(url string) ClientOption {
 	return func(c *Client) {
 		c.apiURL = url
 	}
 }
 
-// WithToken sets the session token
+// WithToken sets the session token for authentication.
+//
+// This overrides any session token provided during client creation.
+// Use this when you need to update the token without creating a new client.
+//
+// Example:
+//
+//	client := anytype.NewClient(
+//	    apiURL, "", appKey, // Empty token will be overridden
+//	    anytype.WithToken(newSessionToken),
+//	)
 func WithToken(token string) ClientOption {
 	return func(c *Client) {
 		c.sessionToken = token
 	}
 }
 
-// WithAppKey sets the app key
+// WithAppKey sets the application key for authentication.
+//
+// This overrides any app key provided during client creation.
+// The app key is required alongside the session token for API authentication.
+//
+// Example:
+//
+//	client := anytype.NewClient(
+//	    apiURL, sessionToken, "", // Empty app key will be overridden
+//	    anytype.WithAppKey(newAppKey),
+//	)
 func WithAppKey(appKey string) ClientOption {
 	return func(c *Client) {
 		c.appKey = appKey
 	}
 }
 
-// NewClient creates a new API client with options
+// NewClient creates a new Anytype API client with the specified options.
+//
+// By default, the client uses the local Anytype API URL (http://localhost:31009) and
+// a 10-second HTTP timeout. You can customize these and other settings using the
+// various WithX option functions.
+//
+// The appKey is required for authentication. If not provided via options,
+// an error will be returned.
+//
+// Example:
+//
+//	// Create a client with default settings
+//	client, err := anytype.NewClient(
+//	    anytype.WithAppKey("your-app-key"),
+//	    anytype.WithToken("your-session-token"),
+//	)
+//	if err != nil {
+//	    log.Fatalf("Failed to create client: %v", err)
+//	}
+//
+//	// Create a client with custom settings
+//	client, err := anytype.NewClient(
+//	    anytype.WithAppKey("your-app-key"),
+//	    anytype.WithToken("your-session-token"),
+//	    anytype.WithURL("https://custom-anytype-server.com"),
+//	    anytype.WithDebug(true),
+//	    anytype.WithTimeout(30 * time.Second),
+//	)
 func NewClient(opts ...ClientOption) (*Client, error) {
 	client := &Client{
 		apiURL:     defaultAPIURL, // Default API URL
