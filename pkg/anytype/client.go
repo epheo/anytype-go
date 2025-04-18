@@ -20,7 +20,7 @@ const (
 	// HTTP client timeout
 	httpTimeout = 10 * time.Second
 	// Current API version
-	apiVersion = "2025-03-17"
+	apiVersion = "2025-04-18"
 	// Default API URL
 	defaultAPIURL = "http://localhost:31009"
 )
