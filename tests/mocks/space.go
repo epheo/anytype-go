@@ -55,6 +55,7 @@ type MockSpaceService struct {
 	MockTypeService    *MockTypeService
 	MockObjectsService *MockObjectsService
 	MockMembersService *MockMembersService
+	MockPropertyClient *MockSpacePropertyClient
 	MockSearchFunc     func(ctx context.Context, req anytype.SearchRequest) (*anytype.SearchResponse, error)
 }
 
@@ -63,6 +64,7 @@ func NewMockSpaceService() *MockSpaceService {
 	typeService := NewMockTypeService()
 	objectsService := NewMockObjectsService()
 	membersService := NewMockMembersService()
+	propertyClient := NewMockSpacePropertyClient()
 
 	return &MockSpaceService{
 		CurrentSpaceID: "mock-space-id",
@@ -78,6 +80,7 @@ func NewMockSpaceService() *MockSpaceService {
 		MockTypeService:    typeService,
 		MockObjectsService: objectsService,
 		MockMembersService: membersService,
+		MockPropertyClient: propertyClient,
 		MockSearchFunc: func(ctx context.Context, req anytype.SearchRequest) (*anytype.SearchResponse, error) {
 			// Check if this is the specific search we're testing for
 			if req.Query == "UniqueTestSearchTerm2025" {
@@ -160,6 +163,11 @@ func (s *MockSpaceService) List(listID string) anytype.ListContext {
 // Search calls the mock implementation
 func (s *MockSpaceService) Search(ctx context.Context, req anytype.SearchRequest) (*anytype.SearchResponse, error) {
 	return s.MockSearchFunc(ctx, req)
+}
+
+// Properties returns the mock property client
+func (s *MockSpaceService) Properties() anytype.SpacePropertyClient {
+	return s.MockPropertyClient
 }
 
 // MockSearchClient implements the anytype.SearchClient interface for testing

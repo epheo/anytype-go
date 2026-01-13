@@ -56,3 +56,15 @@ type Relation struct {
 	Format   string
 	ObjectID string `json:"object_id"`
 }
+
+// CreatePropertyRequest contains parameters for creating a new property
+type CreatePropertyRequest struct {
+	Key    string `json:"key"`
+	Name   string `json:"name"`
+	Format string `json:"format"`
+}
+
+// PropertyResponse represents the response from creating or getting a property
+type PropertyResponse struct {
+	Property Property `json:"property"`
+}

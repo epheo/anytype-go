@@ -3,7 +3,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/epheo/anytype-go"
@@ -16,14 +15,8 @@ type SpaceClientImpl struct {
 
 // Create creates a new space
 func (sc *SpaceClientImpl) Create(ctx context.Context, request anytype.CreateSpaceRequest) (*anytype.CreateSpaceResponse, error) {
-	// Encode the request as JSON payload
-	jsonData, err := json.Marshal(request)
-	if err != nil {
-		return nil, err
-	}
-
 	// Create HTTP request
-	req, err := sc.client.newRequest(ctx, http.MethodPost, "/spaces", jsonData)
+	req, err := sc.client.newRequest(ctx, http.MethodPost, "/spaces", request)
 	if err != nil {
 		return nil, err
 	}
@@ -168,4 +161,54 @@ func (sc *SpaceContextImpl) Member(memberID string) anytype.MemberContext {
 		spaceID:  sc.spaceID,
 		memberID: memberID,
 	}
+}
+
+// Properties returns a SpacePropertyClient for this space
+func (sc *SpaceContextImpl) Properties() anytype.SpacePropertyClient {
+	return &SpacePropertyClientImpl{
+		client:  sc.client,
+		spaceID: sc.spaceID,
+	}
+}
+
+// SpacePropertyClientImpl implements the SpacePropertyClient interface
+type SpacePropertyClientImpl struct {
+	client  *ClientImpl
+	spaceID string
+}
+
+// Create creates a new property in the space
+func (pc *SpacePropertyClientImpl) Create(ctx context.Context, request anytype.CreatePropertyRequest) (*anytype.PropertyResponse, error) {
+	endpoint := "/spaces/" + pc.spaceID + "/properties"
+
+	req, err := pc.client.newRequest(ctx, http.MethodPost, endpoint, request)
+	if err != nil {
+		return nil, err
+	}
+
+	var response anytype.PropertyResponse
+	if err := pc.client.doRequest(req, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+// List returns all properties in the space
+func (pc *SpacePropertyClientImpl) List(ctx context.Context) ([]anytype.Property, error) {
+	endpoint := "/spaces/" + pc.spaceID + "/properties"
+
+	req, err := pc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var response struct {
+		Data []anytype.Property `json:"data"`
+	}
+	if err := pc.client.doRequest(req, &response); err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
 }

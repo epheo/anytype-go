@@ -30,6 +30,9 @@ type SpaceContext interface {
 	// Type returns a TypeContext for a specific type in this space
 	Type(typeID string) TypeContext
 
+	// Properties returns a SpacePropertyClient for this space
+	Properties() SpacePropertyClient
+
 	// Search searches for objects within this space
 	Search(ctx context.Context, request SearchRequest) (*SearchResponse, error)
 
@@ -44,6 +47,15 @@ type SpaceContext interface {
 
 	// Member returns a MemberContext for a specific member in this space
 	Member(memberID string) MemberContext
+}
+
+// SpacePropertyClient provides operations on space-level properties
+type SpacePropertyClient interface {
+	// Create creates a new property in the space
+	Create(ctx context.Context, request CreatePropertyRequest) (*PropertyResponse, error)
+
+	// List returns all properties in the space
+	List(ctx context.Context) ([]Property, error)
 }
 
 // Space represents an Anytype workspace/space

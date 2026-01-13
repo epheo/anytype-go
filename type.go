@@ -36,6 +36,7 @@ type TypeContext interface {
 
 // Type represents an object type in Anytype
 type Type struct {
+	ID                string `json:"id"`
 	Key               string
 	Name              string
 	Description       string
