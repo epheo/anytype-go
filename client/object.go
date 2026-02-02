@@ -94,10 +94,22 @@ func (oc *ObjectContextImpl) Get(ctx context.Context) (*anytype.ObjectResponse, 
 }
 
 // Update updates the object
-func (oc *ObjectContextImpl) Update(ctx context.Context, request anytype.UpdateObjectRequest) error {
-	// Actual implementation would make an HTTP request to the endpoint
-	// PUT /spaces/{space_id}/objects/{object_id}
-	return nil
+func (oc *ObjectContextImpl) Update(ctx context.Context, request anytype.UpdateObjectRequest) (*anytype.ObjectResponse, error) {
+	endpoint := fmt.Sprintf("/spaces/%s/objects/%s", oc.spaceID, oc.objectID)
+
+	req, err := oc.client.newRequest(ctx, http.MethodPatch, endpoint, request)
+	if err != nil {
+		return nil, err
+	}
+
+	var response anytype.ObjectResponse
+	err = oc.client.doRequest(req, &response)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &response, nil
 }
 
 // Delete deletes the object
