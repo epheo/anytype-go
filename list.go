@@ -4,10 +4,6 @@ import (
 	"context"
 )
 
-type ListClient interface {
-	Add(ctx context.Context, objectIDs []string) error
-}
-
 type ListContext interface {
 	Views() ViewClient
 	View(viewID string) ViewContext
@@ -24,7 +20,6 @@ type ViewContext interface {
 }
 
 type ObjectListClient interface {
-	List(ctx context.Context) (*ObjectListResponse, error)
 	Add(ctx context.Context, objectIDs []string) error
 }
 
@@ -61,20 +56,10 @@ type ListSort struct {
 
 type ViewListResponse struct {
 	Data       []ListView `json:"data"`
-	Pagination struct {
-		Limit   int  `json:"limit"`
-		Offset  int  `json:"offset"`
-		Total   int  `json:"total"`
-		HasMore bool `json:"has_more"`
-	} `json:"pagination"`
+	Pagination Pagination `json:"pagination"`
 }
 
 type ObjectListResponse struct {
-	Data       []Object `json:"data"`
-	Pagination struct {
-		Limit   int  `json:"limit"`
-		Offset  int  `json:"offset"`
-		Total   int  `json:"total"`
-		HasMore bool `json:"has_more"`
-	} `json:"pagination"`
+	Data       []Object   `json:"data"`
+	Pagination Pagination `json:"pagination"`
 }

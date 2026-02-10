@@ -14,7 +14,7 @@ type TemplateClientImpl struct {
 	typeID  string
 }
 
-func (tc *TemplateClientImpl) List(ctx context.Context) ([]anytype.Template, error) {
+func (tc *TemplateClientImpl) List(ctx context.Context) ([]anytype.Object, error) {
 	endpoint := fmt.Sprintf("/spaces/%s/types/%s/templates", tc.spaceID, tc.typeID)
 
 	req, err := tc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
@@ -23,13 +23,8 @@ func (tc *TemplateClientImpl) List(ctx context.Context) ([]anytype.Template, err
 	}
 
 	var response struct {
-		Data       []anytype.Template `json:"data"`
-		Pagination struct {
-			HasMore bool `json:"has_more"`
-			Limit   int  `json:"limit"`
-			Offset  int  `json:"offset"`
-			Total   int  `json:"total"`
-		} `json:"pagination"`
+		Data       []anytype.Object   `json:"data"`
+		Pagination anytype.Pagination `json:"pagination"`
 	}
 
 	if err := tc.client.doRequest(req, &response); err != nil {
@@ -37,25 +32,6 @@ func (tc *TemplateClientImpl) List(ctx context.Context) ([]anytype.Template, err
 	}
 
 	return response.Data, nil
-}
-
-func (tc *TemplateClientImpl) Get(ctx context.Context, templateID string) (*anytype.Template, error) {
-	endpoint := fmt.Sprintf("/spaces/%s/types/%s/templates/%s", tc.spaceID, tc.typeID, templateID)
-
-	req, err := tc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var response struct {
-		Template anytype.Template `json:"template"`
-	}
-
-	if err := tc.client.doRequest(req, &response); err != nil {
-		return nil, err
-	}
-
-	return &response.Template, nil
 }
 
 type TemplateContextImpl struct {
@@ -73,15 +49,10 @@ func (tc *TemplateContextImpl) Get(ctx context.Context) (*anytype.TemplateRespon
 		return nil, err
 	}
 
-	var response struct {
-		Template anytype.Template `json:"template"`
-	}
-
+	var response anytype.TemplateResponse
 	if err := tc.client.doRequest(req, &response); err != nil {
 		return nil, err
 	}
 
-	return &anytype.TemplateResponse{
-		Template: response.Template,
-	}, nil
+	return &response, nil
 }

@@ -2,18 +2,22 @@ package anytype
 
 import (
 	"context"
+	"errors"
 )
+
+var ErrTypeNotFound = errors.New("type not found")
 
 type TypeClient interface {
 	List(ctx context.Context) ([]Type, error)
 	Get(ctx context.Context, typeKey string) (*Type, error)
 	GetKeyByName(ctx context.Context, name string) (string, error)
 	Create(ctx context.Context, request CreateTypeRequest) (*TypeResponse, error)
-	Type(typeID string) TypeContext
 }
 
 type TypeContext interface {
 	Get(ctx context.Context) (*TypeResponse, error)
+	Update(ctx context.Context, request UpdateTypeRequest) (*TypeResponse, error)
+	Delete(ctx context.Context) (*TypeResponse, error)
 	Templates() TemplateClient
 	Template(templateID string) TemplateContext
 }
@@ -31,15 +35,9 @@ type Type struct {
 }
 
 type PropertyDefinition struct {
-	Key    string `json:"key,omitempty"`
+	Key    string `json:"key"`
 	Name   string `json:"name"`
 	Format string `json:"format"`
-}
-
-type PropertyOption struct {
-	ID    string
-	Value string
-	Color string
 }
 
 type CreateTypeRequest struct {
@@ -47,6 +45,15 @@ type CreateTypeRequest struct {
 	Name       string               `json:"name"`
 	Icon       *Icon                `json:"icon,omitempty"`
 	Layout     string               `json:"layout"`
+	PluralName string               `json:"plural_name"`
+	Properties []PropertyDefinition `json:"properties,omitempty"`
+}
+
+type UpdateTypeRequest struct {
+	Key        string               `json:"key,omitempty"`
+	Name       string               `json:"name,omitempty"`
+	Icon       *Icon                `json:"icon,omitempty"`
+	Layout     string               `json:"layout,omitempty"`
 	PluralName string               `json:"plural_name,omitempty"`
 	Properties []PropertyDefinition `json:"properties,omitempty"`
 }

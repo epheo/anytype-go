@@ -2,7 +2,7 @@ package client
 
 import (
 	"context"
-	"log"
+	"net/http"
 
 	"github.com/epheo/anytype-go"
 )
@@ -27,7 +27,7 @@ func (ac *AuthClientImpl) CreateChallenge(ctx context.Context, appName string) (
 		AppName: appName,
 	}
 
-	req, err := ac.client.newRequest(ctx, "POST", urlPath, requestBody)
+	req, err := ac.client.newRequest(ctx, http.MethodPost, urlPath, requestBody)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func (ac *AuthClientImpl) CreateApiKey(ctx context.Context, challengeID string, 
 		Code:        code,
 	}
 
-	req, err := ac.client.newRequest(ctx, "POST", urlPath, requestBody)
+	req, err := ac.client.newRequest(ctx, http.MethodPost, urlPath, requestBody)
 	if err != nil {
 		return nil, err
 	}
@@ -60,34 +60,4 @@ func (ac *AuthClientImpl) CreateApiKey(ctx context.Context, challengeID string, 
 	}
 
 	return &result, nil
-}
-
-// Deprecated: Use CreateChallenge instead
-func (ac *AuthClientImpl) DisplayCode(ctx context.Context, appName string) (*anytype.DisplayCodeResponse, error) {
-	// Log warning to stderr to help users discover they're using deprecated API
-	log.Println("Warning: DisplayCode is deprecated, use CreateChallenge instead")
-
-	resp, err := ac.CreateChallenge(ctx, appName)
-	if err != nil {
-		return nil, err
-	}
-
-	return &anytype.DisplayCodeResponse{
-		ChallengeID: resp.ChallengeID,
-	}, nil
-}
-
-// Deprecated: Use CreateApiKey instead
-func (ac *AuthClientImpl) GetToken(ctx context.Context, challengeID string, code string) (*anytype.TokenResponse, error) {
-	// Log warning to stderr to help users discover they're using deprecated API
-	log.Println("Warning: GetToken is deprecated, use CreateApiKey instead")
-
-	resp, err := ac.CreateApiKey(ctx, challengeID, code)
-	if err != nil {
-		return nil, err
-	}
-
-	return &anytype.TokenResponse{
-		AppKey: resp.ApiKey,
-	}, nil
 }

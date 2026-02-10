@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/epheo/anytype-go"
@@ -12,18 +11,13 @@ type SpaceClientImpl struct {
 	client *ClientImpl
 }
 
-func (sc *SpaceClientImpl) Create(ctx context.Context, request anytype.CreateSpaceRequest) (*anytype.CreateSpaceResponse, error) {
-	jsonData, err := json.Marshal(request)
+func (sc *SpaceClientImpl) Create(ctx context.Context, request anytype.CreateSpaceRequest) (*anytype.SpaceResponse, error) {
+	req, err := sc.client.newRequest(ctx, http.MethodPost, "/spaces", request)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := sc.client.newRequest(ctx, http.MethodPost, "/spaces", jsonData)
-	if err != nil {
-		return nil, err
-	}
-
-	response := &anytype.CreateSpaceResponse{}
+	response := &anytype.SpaceResponse{}
 	err = sc.client.doRequest(req, response)
 	if err != nil {
 		return nil, err
@@ -52,16 +46,26 @@ type SpaceContextImpl struct {
 	spaceID string
 }
 
-func (sc *SpaceContextImpl) Lists() anytype.ListClient {
-	return &ListClientImpl{
-		client:  sc.client,
-		spaceID: sc.spaceID,
-	}
-}
-
 func (sc *SpaceContextImpl) Get(ctx context.Context) (*anytype.SpaceResponse, error) {
 	endpoint := "/spaces/" + sc.spaceID
 	req, err := sc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &anytype.SpaceResponse{}
+	err = sc.client.doRequest(req, response)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (sc *SpaceContextImpl) Update(ctx context.Context, request anytype.UpdateSpaceRequest) (*anytype.SpaceResponse, error) {
+	endpoint := "/spaces/" + sc.spaceID
+
+	req, err := sc.client.newRequest(ctx, http.MethodPatch, endpoint, request)
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +132,21 @@ func (sc *SpaceContextImpl) Search(ctx context.Context, request anytype.SearchRe
 	}
 
 	return response, nil
+}
+
+func (sc *SpaceContextImpl) Properties() anytype.SpacePropertyClient {
+	return &SpacePropertyClientImpl{
+		client:  sc.client,
+		spaceID: sc.spaceID,
+	}
+}
+
+func (sc *SpaceContextImpl) Property(propertyID string) anytype.PropertyContext {
+	return &PropertyContextImpl{
+		client:     sc.client,
+		spaceID:    sc.spaceID,
+		propertyID: propertyID,
+	}
 }
 
 func (sc *SpaceContextImpl) Members() anytype.MemberClient {

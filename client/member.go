@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/epheo/anytype-go"
-	"github.com/epheo/anytype-go/options"
 )
 
 type MemberClientImpl struct {
@@ -14,25 +13,17 @@ type MemberClientImpl struct {
 }
 
 func (mc *MemberClientImpl) List(ctx context.Context) (*anytype.MemberListResponse, error) {
-	path := "/spaces/" + mc.spaceID + "/members"
-
-	var response struct {
-		Data       []anytype.Member           `json:"data"`
-		Pagination options.PaginationMetadata `json:"pagination"`
-	}
-
-	req, err := mc.client.newRequest(ctx, http.MethodGet, path, nil)
+	req, err := mc.client.newRequest(ctx, http.MethodGet, "/spaces/"+mc.spaceID+"/members", nil)
 	if err != nil {
 		return nil, err
 	}
 
+	var response anytype.MemberListResponse
 	if err := mc.client.doRequest(req, &response); err != nil {
 		return nil, err
 	}
 
-	return &anytype.MemberListResponse{
-		Data: response.Data,
-	}, nil
+	return &response, nil
 }
 
 type MemberContextImpl struct {

@@ -5,15 +5,7 @@ import (
 )
 
 type TemplateClient interface {
-	List(ctx context.Context) ([]Template, error)
-	Get(ctx context.Context, templateID string) (*Template, error)
-}
-
-type Template struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Icon     *Icon  `json:"icon,omitempty"`
-	Archived bool   `json:"archived"`
+	List(ctx context.Context) ([]Object, error)
 }
 
 type TemplateContext interface {
@@ -21,5 +13,5 @@ type TemplateContext interface {
 }
 
 type TemplateResponse struct {
-	Template Template `json:"template"`
+	Template Object `json:"template"`
 }

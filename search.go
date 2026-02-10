@@ -2,6 +2,8 @@ package anytype
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 )
 
 type SearchClient interface {
@@ -9,7 +11,8 @@ type SearchClient interface {
 }
 
 type SearchResponse struct {
-	Data []Object `json:"data"`
+	Data       []Object   `json:"data"`
+	Pagination Pagination `json:"pagination"`
 }
 
 type SearchRequest struct {
@@ -20,7 +23,7 @@ type SearchRequest struct {
 }
 
 type SortOptions struct {
-	Property  SortProperty  `json:"property"`
+	Property  SortProperty  `json:"property_key"`
 	Direction SortDirection `json:"direction"`
 }
 
@@ -51,34 +54,152 @@ const (
 	FilterOperatorOr  FilterOperator = "or"
 )
 
+// FilterFormat determines which JSON field name is used when serializing filter values.
+// The API expects format-specific field names (e.g. "text", "number", "checkbox")
+// rather than generic "value" fields.
+type FilterFormat string
+
+const (
+	FilterFormatText        FilterFormat = "text"
+	FilterFormatNumber      FilterFormat = "number"
+	FilterFormatSelect      FilterFormat = "select"
+	FilterFormatMultiSelect FilterFormat = "multi_select"
+	FilterFormatDate        FilterFormat = "date"
+	FilterFormatCheckbox    FilterFormat = "checkbox"
+	FilterFormatFiles       FilterFormat = "files"
+	FilterFormatURL         FilterFormat = "url"
+	FilterFormatEmail       FilterFormat = "email"
+	FilterFormatPhone       FilterFormat = "phone"
+	FilterFormatObjects     FilterFormat = "objects"
+)
+
+// FilterItem represents a single filter condition. Set Format to indicate
+// which type of filter value is being used (e.g. FilterFormatText, FilterFormatCheckbox).
+// For empty/nempty conditions, Format and Value can be omitted.
 type FilterItem struct {
-	Key       string          `json:"key"`
-	Condition FilterCondition `json:"condition"`
-	Value     interface{}     `json:"value,omitempty"`
-	Values    []interface{}   `json:"values,omitempty"`
+	Key       string          `json:"-"`
+	Format    FilterFormat    `json:"-"`
+	Condition FilterCondition `json:"-"`
+	Value     interface{}     `json:"-"`
+}
+
+func (f FilterItem) MarshalJSON() ([]byte, error) {
+	m := map[string]interface{}{
+		"property_key": f.Key,
+		"condition":    f.Condition,
+	}
+	if f.Format != "" && f.Value != nil {
+		m[string(f.Format)] = f.Value
+	}
+	return json.Marshal(m)
+}
+
+func (f *FilterItem) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	if v, ok := raw["property_key"]; ok {
+		if err := json.Unmarshal(v, &f.Key); err != nil {
+			return err
+		}
+	}
+	if v, ok := raw["condition"]; ok {
+		if err := json.Unmarshal(v, &f.Condition); err != nil {
+			return err
+		}
+	}
+
+	formatFields := []FilterFormat{
+		FilterFormatText, FilterFormatNumber, FilterFormatSelect,
+		FilterFormatMultiSelect, FilterFormatDate, FilterFormatCheckbox,
+		FilterFormatFiles, FilterFormatURL, FilterFormatEmail,
+		FilterFormatPhone, FilterFormatObjects,
+	}
+
+	for _, ff := range formatFields {
+		if v, ok := raw[string(ff)]; ok {
+			f.Format = ff
+			var val interface{}
+			if err := json.Unmarshal(v, &val); err != nil {
+				return fmt.Errorf("unmarshal %s: %w", ff, err)
+			}
+			f.Value = val
+			return nil
+		}
+	}
+
+	return nil
+}
+
+// Convenience constructors for common filter types
+
+func TextFilter(key string, condition FilterCondition, text string) FilterItem {
+	return FilterItem{Key: key, Format: FilterFormatText, Condition: condition, Value: text}
+}
+
+func NumberFilter(key string, condition FilterCondition, number float64) FilterItem {
+	return FilterItem{Key: key, Format: FilterFormatNumber, Condition: condition, Value: number}
+}
+
+func CheckboxFilter(key string, condition FilterCondition, checked bool) FilterItem {
+	return FilterItem{Key: key, Format: FilterFormatCheckbox, Condition: condition, Value: checked}
+}
+
+func SelectFilter(key string, condition FilterCondition, tagID string) FilterItem {
+	return FilterItem{Key: key, Format: FilterFormatSelect, Condition: condition, Value: tagID}
+}
+
+func MultiSelectFilter(key string, condition FilterCondition, tagIDs []string) FilterItem {
+	return FilterItem{Key: key, Format: FilterFormatMultiSelect, Condition: condition, Value: tagIDs}
+}
+
+func DateFilter(key string, condition FilterCondition, date string) FilterItem {
+	return FilterItem{Key: key, Format: FilterFormatDate, Condition: condition, Value: date}
+}
+
+func URLFilter(key string, condition FilterCondition, url string) FilterItem {
+	return FilterItem{Key: key, Format: FilterFormatURL, Condition: condition, Value: url}
+}
+
+func EmailFilter(key string, condition FilterCondition, email string) FilterItem {
+	return FilterItem{Key: key, Format: FilterFormatEmail, Condition: condition, Value: email}
+}
+
+func PhoneFilter(key string, condition FilterCondition, phone string) FilterItem {
+	return FilterItem{Key: key, Format: FilterFormatPhone, Condition: condition, Value: phone}
+}
+
+func FilesFilter(key string, condition FilterCondition, fileIDs []string) FilterItem {
+	return FilterItem{Key: key, Format: FilterFormatFiles, Condition: condition, Value: fileIDs}
+}
+
+func ObjectsFilter(key string, condition FilterCondition, objectIDs []string) FilterItem {
+	return FilterItem{Key: key, Format: FilterFormatObjects, Condition: condition, Value: objectIDs}
+}
+
+func EmptyFilter(key string, condition FilterCondition) FilterItem {
+	return FilterItem{Key: key, Condition: condition}
 }
 
 type FilterCondition string
 
 const (
-	FilterConditionEqual    FilterCondition = "equal"
-	FilterConditionNotEqual FilterCondition = "not_equal"
-	FilterConditionIn       FilterCondition = "in"
-	FilterConditionNotIn    FilterCondition = "not_in"
-	FilterConditionEmpty    FilterCondition = "empty"
-	FilterConditionNotEmpty FilterCondition = "not_empty"
+	FilterConditionEq     FilterCondition = "eq"
+	FilterConditionNe     FilterCondition = "ne"
+	FilterConditionIn     FilterCondition = "in"
+	FilterConditionNin    FilterCondition = "nin"
+	FilterConditionEmpty  FilterCondition = "empty"
+	FilterConditionNEmpty FilterCondition = "nempty"
 
-	FilterConditionContains    FilterCondition = "contains"
-	FilterConditionNotContains FilterCondition = "not_contains"
+	FilterConditionContains  FilterCondition = "contains"
+	FilterConditionNContains FilterCondition = "ncontains"
 
-	FilterConditionGreater      FilterCondition = "greater"
-	FilterConditionLess         FilterCondition = "less"
-	FilterConditionGreaterEqual FilterCondition = "greater_or_equal"
-	FilterConditionLessEqual    FilterCondition = "less_or_equal"
+	FilterConditionGt  FilterCondition = "gt"
+	FilterConditionLt  FilterCondition = "lt"
+	FilterConditionGte FilterCondition = "gte"
+	FilterConditionLte FilterCondition = "lte"
 
-	FilterConditionDaysAgo   FilterCondition = "days_ago"
-	FilterConditionDaysAhead FilterCondition = "days_ahead"
-
-	FilterConditionChecked    FilterCondition = "checked"
-	FilterConditionNotChecked FilterCondition = "not_checked"
+	FilterConditionAll FilterCondition = "all"
 )

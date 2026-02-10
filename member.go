@@ -13,17 +13,19 @@ type MemberContext interface {
 }
 
 type Member struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	GlobalName string `json:"global_name"`
-	Identity   string `json:"identity"`
-	Role       string `json:"role"`
-	Status     string `json:"status"`
-	Icon       *Icon  `json:"icon,omitempty"`
+	ID         string       `json:"id"`
+	Object     string       `json:"object"`
+	Name       string       `json:"name"`
+	GlobalName string       `json:"global_name"`
+	Identity   string       `json:"identity"`
+	Role       MemberRole   `json:"role"`
+	Status     MemberStatus `json:"status"`
+	Icon       *Icon        `json:"icon,omitempty"`
 }
 
 type MemberListResponse struct {
-	Data []Member `json:"data"`
+	Data       []Member   `json:"data"`
+	Pagination Pagination `json:"pagination"`
 }
 
 type MemberResponse struct {

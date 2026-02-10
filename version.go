@@ -2,7 +2,8 @@ package anytype
 
 const (
 	// Follows AnyType Versioning
-	Version = "0.53.1"
+	Version    = "0.53.1"
+	APIVersion = "2025-11-08"
 )
 
 type VersionInfo struct {
@@ -12,6 +13,7 @@ type VersionInfo struct {
 
 func GetVersionInfo() VersionInfo {
 	return VersionInfo{
-		Version: Version,
+		Version:    Version,
+		APIVersion: APIVersion,
 	}
 }

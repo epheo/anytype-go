@@ -24,15 +24,20 @@ type EndpointInfo struct {
 	Implemented bool
 }
 
+type methodPath struct {
+	Method string
+	Path   string
+}
+
 var (
-	// Matches fmt.Sprintf("/path/%s/...", ...) or inline "/path" strings
-	reSprintfPath = regexp.MustCompile(`fmt\.Sprintf\("(/[^"]+)"`)
 	// Matches urlPath/endpoint/path := "/literal/path"
 	reLiteralPath = regexp.MustCompile(`(?:endpoint|urlPath|path)\s*:?=\s*"(/[^"]+)"`)
 	// Matches string concatenation assignments: endpoint := "/spaces/" + var + "/members"
 	reConcatAssign = regexp.MustCompile(`(?:endpoint|urlPath|path)\s*:?=\s*(".+)$`)
-	// Matches inline literal paths in newRequest calls
-	reInlinePath = regexp.MustCompile(`newRequest\([^,]+,\s*[^,]+,\s*"(/[^"]+)"`)
+	// Matches fmt.Sprintf assigned to a path variable: endpoint := fmt.Sprintf("/path/%s", ...)
+	reSprintfAssign = regexp.MustCompile(`(?:endpoint|urlPath|path)\s*:?=\s*fmt\.Sprintf\("(/[^"]+)"`)
+	// Extracts HTTP method and optional inline path from newRequest calls
+	reNewRequest = regexp.MustCompile(`newRequest\([^,]+,\s*(?:http\.Method(\w+)|"(\w+)")(?:.*?,\s*(?:fmt\.Sprintf\("(/[^"]+)"|"(/[^"]+)"))?`)
 	// For normalizing path parameters
 	reParamPlaceholder = regexp.MustCompile(`\{[^}]*\}|%[a-zA-Z]`)
 )
@@ -125,7 +130,7 @@ func checkSDKImplementation(endpoints []EndpointInfo) {
 	for i := range endpoints {
 		apiNorm := normalizeAPIPath(endpoints[i].Path)
 		for _, cp := range clientPaths {
-			if apiNorm == cp {
+			if apiNorm == cp.Path && endpoints[i].Method == cp.Method {
 				endpoints[i].Implemented = true
 				break
 			}
@@ -139,14 +144,14 @@ func normalizeAPIPath(p string) string {
 	return strings.TrimSuffix(p, "/")
 }
 
-func extractClientPaths(dir string) ([]string, error) {
+func extractClientPaths(dir string) ([]methodPath, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	seen := make(map[string]bool)
-	var paths []string
+	seen := make(map[methodPath]bool)
+	var paths []methodPath
 
 	for _, f := range files {
 		if f.IsDir() || !strings.HasSuffix(f.Name(), ".go") {
@@ -157,33 +162,58 @@ func extractClientPaths(dir string) ([]string, error) {
 			continue
 		}
 
-		for _, line := range strings.Split(string(data), "\n") {
+		lines := strings.Split(string(data), "\n")
+		for i, line := range lines {
 			trimmed := strings.TrimSpace(line)
-			var raw string
+			m := reNewRequest.FindStringSubmatch(trimmed)
+			if m == nil {
+				continue
+			}
 
+			// Group 1: http.Method name, Group 2: string literal method
+			method := strings.ToUpper(m[1] + m[2])
+
+			// Extract path: prefer inline fmt.Sprintf (group 3), then inline literal (group 4)
+			var raw string
 			switch {
-			case reSprintfPath.MatchString(trimmed):
-				raw = reSprintfPath.FindStringSubmatch(trimmed)[1]
-			case reInlinePath.MatchString(trimmed):
-				raw = reInlinePath.FindStringSubmatch(trimmed)[1]
-			case reLiteralPath.MatchString(trimmed) && !strings.Contains(trimmed, "+"):
-				raw = reLiteralPath.FindStringSubmatch(trimmed)[1]
-			case reConcatAssign.MatchString(trimmed) && strings.Contains(trimmed, "+"):
-				raw = extractConcatPath(trimmed)
+			case m[3] != "":
+				raw = m[3]
+			case m[4] != "":
+				raw = m[4]
+			default:
+				// Path is in a variable — scan preceding lines for assignment
+				raw = findPrecedingPath(lines, i)
 			}
 
 			if raw == "" {
 				continue
 			}
 
-			normalized := normalizePath(raw)
-			if !seen[normalized] {
-				seen[normalized] = true
-				paths = append(paths, normalized)
+			mp := methodPath{Method: method, Path: normalizePath(raw)}
+			if !seen[mp] {
+				seen[mp] = true
+				paths = append(paths, mp)
 			}
 		}
 	}
 	return paths, nil
+}
+
+// findPrecedingPath scans lines before index i for a path variable assignment.
+func findPrecedingPath(lines []string, i int) string {
+	for j := i - 1; j >= 0 && j >= i-20; j-- {
+		trimmed := strings.TrimSpace(lines[j])
+		if m := reSprintfAssign.FindStringSubmatch(trimmed); m != nil {
+			return m[1]
+		}
+		if reLiteralPath.MatchString(trimmed) && !strings.Contains(trimmed, "+") {
+			return reLiteralPath.FindStringSubmatch(trimmed)[1]
+		}
+		if reConcatAssign.MatchString(trimmed) && strings.Contains(trimmed, "+") {
+			return extractConcatPath(trimmed)
+		}
+	}
+	return ""
 }
 
 func extractConcatPath(line string) string {

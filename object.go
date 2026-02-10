@@ -2,33 +2,31 @@ package anytype
 
 import (
 	"context"
-
-	"github.com/epheo/anytype-go/options"
 )
 
 type ObjectClient interface {
-	List(ctx context.Context, opts ...options.ListOption) ([]Object, error)
+	List(ctx context.Context, opts ...ListOption) ([]Object, error)
 	Create(ctx context.Context, request CreateObjectRequest) (*ObjectResponse, error)
 }
 
 type ObjectContext interface {
-	Get(ctx context.Context) (*ObjectResponse, error)
+	Get(ctx context.Context, opts ...GetOption) (*ObjectResponse, error)
+	Update(ctx context.Context, request UpdateObjectRequest) (*ObjectResponse, error)
 	Delete(ctx context.Context) (*ObjectResponse, error)
-	Export(ctx context.Context, format string) (*ExportResult, error)
 }
 
 type Object struct {
-	ID         string
-	Name       string
-	SpaceID    string `json:"space_id"`
-	TypeKey    string
-	Layout     string
-	Archived   bool
-	Icon       *Icon
-	Snippet    string
-	Properties []Property
-	Type       *Type  `json:"type,omitempty"`
-	Markdown   string `json:"markdown,omitempty"`
+	ID         string     `json:"id"`
+	Object     string     `json:"object"`
+	Name       string     `json:"name"`
+	SpaceID    string     `json:"space_id"`
+	Layout     string     `json:"layout"`
+	Archived   bool       `json:"archived"`
+	Icon       *Icon      `json:"icon,omitempty"`
+	Snippet    string     `json:"snippet"`
+	Properties []Property `json:"properties"`
+	Type       *Type      `json:"type,omitempty"`
+	Markdown   string     `json:"markdown,omitempty"`
 }
 
 type ObjectResponse struct {
@@ -57,7 +55,7 @@ type PropertyLinkWithValue struct {
 	Text        *string  `json:"text,omitempty"`
 	Number      *float64 `json:"number,omitempty"`
 	Checkbox    *bool    `json:"checkbox,omitempty"`
-	Date        *int64   `json:"date,omitempty"`
+	Date        *string  `json:"date,omitempty"`
 	URL         *string  `json:"url,omitempty"`
 	Email       *string  `json:"email,omitempty"`
 	Phone       *string  `json:"phone,omitempty"`

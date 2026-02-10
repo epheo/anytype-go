@@ -4,11 +4,46 @@ import (
 	"context"
 )
 
-type PropertyClient interface {
-	Get(ctx context.Context, key string) (*Property, error)
-	Set(ctx context.Context, key string, value interface{}) error
-	Delete(ctx context.Context, key string) error
+type SpacePropertyClient interface {
 	List(ctx context.Context) ([]Property, error)
+	Create(ctx context.Context, request CreatePropertyRequest) (*PropertyResponse, error)
+}
+
+type TagClient interface {
+	List(ctx context.Context) ([]Tag, error)
+	Create(ctx context.Context, request CreateTagRequest) (*TagResponse, error)
+}
+
+type CreatePropertyRequest struct {
+	Name   string             `json:"name"`
+	Format string             `json:"format"`
+	Key    string             `json:"key,omitempty"`
+	Tags   []CreateTagRequest `json:"tags,omitempty"`
+}
+
+type UpdatePropertyRequest struct {
+	Name string `json:"name"`
+	Key  string `json:"key,omitempty"`
+}
+
+type PropertyResponse struct {
+	Property Property `json:"property"`
+}
+
+type CreateTagRequest struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+	Key   string `json:"key,omitempty"`
+}
+
+type UpdateTagRequest struct {
+	Name  string `json:"name,omitempty"`
+	Color string `json:"color,omitempty"`
+	Key   string `json:"key,omitempty"`
+}
+
+type TagResponse struct {
+	Tag Tag `json:"tag"`
 }
 
 type Property struct {
@@ -28,7 +63,6 @@ type Property struct {
 	Select      *Tag     `json:"select,omitempty"`
 	MultiSelect []Tag    `json:"multi_select,omitempty"`
 	Objects     []string `json:"objects,omitempty"`
-	Required    bool     `json:"required,omitempty"`
 }
 
 type Tag struct {
@@ -37,11 +71,4 @@ type Tag struct {
 	Name   string `json:"name,omitempty"`
 	Color  string `json:"color,omitempty"`
 	Object string `json:"object,omitempty"`
-}
-
-type Relation struct {
-	ID       string
-	Type     string
-	Format   string
-	ObjectID string `json:"object_id"`
 }

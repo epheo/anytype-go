@@ -2,16 +2,11 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/epheo/anytype-go"
 )
-
-// Sentinel error allows callers to distinguish "not found" from other errors
-// when using GetKeyByName for type lookups.
-var ErrTypeNotFound = errors.New("type not found")
 
 type TypeClientImpl struct {
 	client  *ClientImpl
@@ -19,7 +14,7 @@ type TypeClientImpl struct {
 }
 
 func (tc *TypeClientImpl) List(ctx context.Context) ([]anytype.Type, error) {
-	req, err := tc.client.newRequest(ctx, "GET", fmt.Sprintf("/spaces/%s/types", tc.spaceID), nil)
+	req, err := tc.client.newRequest(ctx, http.MethodGet, fmt.Sprintf("/spaces/%s/types", tc.spaceID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +30,7 @@ func (tc *TypeClientImpl) List(ctx context.Context) ([]anytype.Type, error) {
 }
 
 func (tc *TypeClientImpl) Get(ctx context.Context, typeKey string) (*anytype.Type, error) {
-	req, err := tc.client.newRequest(ctx, "GET", fmt.Sprintf("/spaces/%s/types/%s", tc.spaceID, typeKey), nil)
+	req, err := tc.client.newRequest(ctx, http.MethodGet, fmt.Sprintf("/spaces/%s/types/%s", tc.spaceID, typeKey), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +60,7 @@ func (tc *TypeClientImpl) GetKeyByName(ctx context.Context, name string) (string
 		}
 	}
 
-	return "", ErrTypeNotFound
+	return "", anytype.ErrTypeNotFound
 }
 
 func (tc *TypeClientImpl) Create(ctx context.Context, request anytype.CreateTypeRequest) (*anytype.TypeResponse, error) {
@@ -85,14 +80,6 @@ func (tc *TypeClientImpl) Create(ctx context.Context, request anytype.CreateType
 	return &response, nil
 }
 
-func (tc *TypeClientImpl) Type(typeID string) anytype.TypeContext {
-	return &TypeContextImpl{
-		client:  tc.client,
-		spaceID: tc.spaceID,
-		typeID:  typeID,
-	}
-}
-
 type TypeContextImpl struct {
 	client  *ClientImpl
 	spaceID string
@@ -100,7 +87,39 @@ type TypeContextImpl struct {
 }
 
 func (tc *TypeContextImpl) Get(ctx context.Context) (*anytype.TypeResponse, error) {
-	req, err := tc.client.newRequest(ctx, "GET", fmt.Sprintf("/spaces/%s/types/%s", tc.spaceID, tc.typeID), nil)
+	req, err := tc.client.newRequest(ctx, http.MethodGet, fmt.Sprintf("/spaces/%s/types/%s", tc.spaceID, tc.typeID), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var response anytype.TypeResponse
+	if err := tc.client.doRequest(req, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+func (tc *TypeContextImpl) Update(ctx context.Context, request anytype.UpdateTypeRequest) (*anytype.TypeResponse, error) {
+	endpoint := fmt.Sprintf("/spaces/%s/types/%s", tc.spaceID, tc.typeID)
+
+	req, err := tc.client.newRequest(ctx, http.MethodPatch, endpoint, request)
+	if err != nil {
+		return nil, err
+	}
+
+	var response anytype.TypeResponse
+	if err := tc.client.doRequest(req, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+func (tc *TypeContextImpl) Delete(ctx context.Context) (*anytype.TypeResponse, error) {
+	endpoint := fmt.Sprintf("/spaces/%s/types/%s", tc.spaceID, tc.typeID)
+
+	req, err := tc.client.newRequest(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}

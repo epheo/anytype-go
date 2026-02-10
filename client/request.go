@@ -11,7 +11,7 @@ import (
 	"net/url"
 	"path"
 
-	"github.com/epheo/anytype-go/middleware"
+	anytype "github.com/epheo/anytype-go"
 )
 
 func (c *ClientImpl) newRequest(ctx context.Context, method, urlPath string, body interface{}) (*http.Request, error) {
@@ -19,8 +19,14 @@ func (c *ClientImpl) newRequest(ctx context.Context, method, urlPath string, bod
 	if err != nil {
 		return nil, err
 	}
-	// Add /v1 API version prefix to maintain compatibility with Anytype API versioning scheme
-	u.Path = path.Join(u.Path, "/v1", urlPath)
+
+	// Separate query string from path before joining
+	parsedPath, err := url.Parse(urlPath)
+	if err != nil {
+		return nil, err
+	}
+	u.Path = path.Join(u.Path, "/v1", parsedPath.Path)
+	u.RawQuery = parsedPath.RawQuery
 
 	var bodyReader io.Reader
 	if body != nil {
@@ -38,8 +44,7 @@ func (c *ClientImpl) newRequest(ctx context.Context, method, urlPath string, bod
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	// Fixed API version ensures consistent behavior across requests
-	req.Header.Set("Anytype-Version", "2025-11-08")
+	req.Header.Set("Anytype-Version", anytype.APIVersion)
 
 	if c.appKey != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.appKey))
@@ -49,14 +54,7 @@ func (c *ClientImpl) newRequest(ctx context.Context, method, urlPath string, bod
 }
 
 func (c *ClientImpl) doRequest(req *http.Request, result interface{}) error {
-	chain := middleware.NewChain(c.httpClient)
-	chain.Use(middleware.WithRetry())
-	// Validation middleware not used yet - requires context-based validators
-	// chain.Use(middleware.WithValidation())
-
-	client := chain.Build()
-
-	resp, err := client.Do(req)
+	resp, err := c.doer.Do(req)
 	if err != nil {
 		return err
 	}

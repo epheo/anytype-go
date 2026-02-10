@@ -4,12 +4,13 @@ import (
 	"net/http"
 
 	"github.com/epheo/anytype-go"
+	"github.com/epheo/anytype-go/middleware"
 )
 
 type ClientImpl struct {
-	httpClient *http.Client
-	baseURL    string
-	appKey     string
+	doer    middleware.HTTPDoer
+	baseURL string
+	appKey  string
 }
 
 func init() {
@@ -18,10 +19,13 @@ func init() {
 }
 
 func NewClient(options anytype.ClientOptions) anytype.Client {
+	chain := middleware.NewChain(http.DefaultClient)
+	chain.Use(middleware.WithRetry())
+
 	return &ClientImpl{
-		httpClient: http.DefaultClient,
-		baseURL:    options.BaseURL,
-		appKey:     options.AppKey,
+		doer:    chain.Build(),
+		baseURL: options.BaseURL,
+		appKey:  options.AppKey,
 	}
 }
 

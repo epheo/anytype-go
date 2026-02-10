@@ -1,6 +1,60 @@
 // Package anytype provides a Go SDK for interacting with the Anytype API.
 package anytype
 
+type Pagination struct {
+	Total   int  `json:"total"`
+	Limit   int  `json:"limit"`
+	Offset  int  `json:"offset"`
+	HasMore bool `json:"has_more"`
+}
+
+type ListOptions struct {
+	Limit  int
+	Offset int
+}
+
+type ListOption func(*ListOptions)
+
+func WithLimit(limit int) ListOption {
+	return func(opts *ListOptions) {
+		opts.Limit = limit
+	}
+}
+
+func WithOffset(offset int) ListOption {
+	return func(opts *ListOptions) {
+		opts.Offset = offset
+	}
+}
+
+func ApplyListOptions(opts ...ListOption) ListOptions {
+	var options ListOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	return options
+}
+
+type GetOptions struct {
+	Format string
+}
+
+type GetOption func(*GetOptions)
+
+func WithFormat(format string) GetOption {
+	return func(opts *GetOptions) {
+		opts.Format = format
+	}
+}
+
+func ApplyGetOptions(opts ...GetOption) GetOptions {
+	var options GetOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	return options
+}
+
 type ClientOptions struct {
 	BaseURL string
 	AppKey  string
