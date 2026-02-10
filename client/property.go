@@ -8,14 +8,12 @@ import (
 	"github.com/epheo/anytype-go"
 )
 
-// PropertyClientImpl implements the PropertyClient interface
 type PropertyClientImpl struct {
 	client   *ClientImpl
 	spaceID  string
 	objectID string
 }
 
-// Get retrieves a specific property value
 func (pc *PropertyClientImpl) Get(ctx context.Context, key string) (*anytype.Property, error) {
 	urlPath := fmt.Sprintf("/spaces/%s/objects/%s/properties/%s", pc.spaceID, pc.objectID, key)
 
@@ -36,11 +34,9 @@ func (pc *PropertyClientImpl) Get(ctx context.Context, key string) (*anytype.Pro
 	return &response.Property, nil
 }
 
-// Set sets a property value
 func (pc *PropertyClientImpl) Set(ctx context.Context, key string, value interface{}) error {
 	urlPath := fmt.Sprintf("/spaces/%s/objects/%s/properties/%s", pc.spaceID, pc.objectID, key)
 
-	// Create request body with the value
 	body := map[string]interface{}{
 		"value": value,
 	}
@@ -53,7 +49,6 @@ func (pc *PropertyClientImpl) Set(ctx context.Context, key string, value interfa
 	return pc.client.doRequest(req, nil)
 }
 
-// Delete removes a property
 func (pc *PropertyClientImpl) Delete(ctx context.Context, key string) error {
 	urlPath := fmt.Sprintf("/spaces/%s/objects/%s/properties/%s", pc.spaceID, pc.objectID, key)
 
@@ -65,7 +60,6 @@ func (pc *PropertyClientImpl) Delete(ctx context.Context, key string) error {
 	return pc.client.doRequest(req, nil)
 }
 
-// List returns all properties of the object
 func (pc *PropertyClientImpl) List(ctx context.Context) ([]anytype.Property, error) {
 	urlPath := fmt.Sprintf("/spaces/%s/objects/%s/properties", pc.spaceID, pc.objectID)
 

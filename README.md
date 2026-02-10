@@ -8,33 +8,33 @@ A Go SDK for interacting with the [Anytype](https://anytype.io) API to manage sp
 
 ## Table of Contents
 
-- [📋 Overview](#-overview)
-- [🔄 API Version Support](#-api-version-support)
-- [📥 Installation](#-installation)
-- [🚦 Quick Start](#-quick-start)
+- [Overview](#overview)
+- [API Version Support](#api-version-support)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
   - [Authentication](#authentication)
   - [Working with Spaces](#working-with-spaces)
   - [Working with Objects](#working-with-objects)
   - [Searching](#searching)
-- [🔧 Advanced Examples](#-advanced-examples)
+- [Advanced Examples](#advanced-examples)
   - [Working with Object Types and Templates](#working-with-object-types-and-templates)
   - [Managing Object Properties](#managing-object-properties)
   - [Working with Lists and Views](#working-with-lists-and-views)
-- [💡 Design Philosophy](#-design-philosophy)
+- [Design Philosophy](#design-philosophy)
   - [1. Fluent Interface Pattern](#1-fluent-interface-pattern)
   - [2. Domain-Driven Design](#2-domain-driven-design)
   - [3. Naming Convention](#3-naming-convention)
   - [4. Middleware Architecture](#4-middleware-architecture)
-- [📚 API Reference](#-api-reference)
-- [✅ Best Practices](#-best-practices)
-- [🔧 Troubleshooting](#-troubleshooting)
-- [🧪 Testing](#-testing)
+- [API Reference](#api-reference)
+- [Best Practices](#best-practices)
+- [Troubleshooting](#troubleshooting)
+- [Testing](#testing)
   - [Unit Tests with Mocks](#unit-tests-with-mocks)
   - [API Coverage Tests](#api-coverage-tests)
-- [👥 Contributing](#-contributing)
-- [📜 License](#-license)
+- [Contributing](#contributing)
+- [License](#license)
 
-## 📋 Overview
+## Overview
 
 Anytype-Go provides a Go SDK for interacting with Anytype's local API. This SDK offers a clean, fluent interface for:
 
@@ -44,7 +44,7 @@ Anytype-Go provides a Go SDK for interacting with Anytype's local API. This SDK 
 - Exporting objects to different formats
 - Working with object types, templates, and properties
 
-## 🔄 API Version Support
+## API Version Support
 
 This SDK is compatible with Anytype API version `2025-11-08`. The SDK follows Anytype's API versioning scheme, which uses date-based versioning for stability and compatibility:
 
@@ -54,7 +54,7 @@ This SDK is compatible with Anytype API version `2025-11-08`. The SDK follows An
 
 If you encounter any compatibility issues when Anytype updates its API, please check for an updated version of this SDK that supports the new API version.
 
-## 📥 Installation
+## Installation
 
 ```bash
 go get github.com/epheo/anytype-go
@@ -69,9 +69,9 @@ import (
 )
 ```
 
-## 🚦 Quick Start
+## Quick Start
 
-> 📁 **More complete examples** can be found in the [examples](./examples) directory, including full implementations of authentication, working with spaces, objects, and more.
+> **More complete examples** can be found in the [examples](./examples) directory, including full implementations of authentication, working with spaces, objects, and more.
 
 ### Authentication
 
@@ -163,7 +163,7 @@ results, err := client.Space(spaceID).Search(ctx, anytype.SearchRequest{
 })
 ```
 
-## 🔧 Advanced Examples
+## Advanced Examples
 
 ### Working with Object Types and Templates
 
@@ -236,7 +236,7 @@ newView, err := client.Space(spaceID).List(listID).Views().Create(ctx, anytype.C
 })
 ```
 
-## 💡 Design Philosophy
+## Design Philosophy
 
 The Anytype-Go SDK is built around three core design principles:
 
@@ -292,11 +292,11 @@ Each middleware handles a specific concern:
 - **Retry**: Handles transient errors with configurable policies
 - **Disconnect**: Manages network interruptions
 
-## 📚 API Reference
+## API Reference
 
 For detailed API documentation, see [GoDoc](https://godoc.org/github.com/epheo/anytype-go).
 
-## ✅ Best Practices
+## Best Practices
 
 1. **Reuse the client instance** across your application
 2. **Use context for cancellation** to control timeouts
@@ -305,14 +305,14 @@ For detailed API documentation, see [GoDoc](https://godoc.org/github.com/epheo/a
 5. **Check for errors** and handle them appropriately
 6. **Use the fluent interface** for cleaner, more readable code
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 - **Authentication Failures**: Verify your app key
 - **Connection Issues**: Ensure Anytype is running locally
 - **Rate Limiting**: Implement backoff if making many requests
 - **API Version Mismatch**: If you get errors about unknown fields or unexpected responses, check that your Anytype app version is compatible with the API version this SDK supports (2025-11-08)
 
-## 🧪 Testing
+## Testing
 
 The SDK testing approach focuses on behavior verification using mock implementations:
 
@@ -334,7 +334,7 @@ go test -v ./tests_api_coverage/...
 
 The test infrastructure uses mock implementations (in `tests/mocks`) to simulate the Anytype API, allowing thorough testing without requiring a running Anytype instance.
 
-## 👥 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create your feature branch
@@ -342,6 +342,6 @@ The test infrastructure uses mock implementations (in `tests/mocks`) to simulate
 4. Push to the branch
 5. Create a new Pull Request
 
-## 📜 License
+## License
 
 Apache License 2.0 - see [LICENSE](LICENSE) file for details.

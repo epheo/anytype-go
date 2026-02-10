@@ -34,6 +34,8 @@ type DisconnectMiddleware struct {
 	Next   HTTPDoer
 	Config DisconnectConfig
 
+	// Connection state is protected by mutex because it's accessed from
+	// concurrent HTTP requests and callback functions.
 	connected bool
 	mu        sync.RWMutex
 }
@@ -76,7 +78,8 @@ func (m *DisconnectMiddleware) isNetworkError(err error) bool {
 		return false
 	}
 
-	// Check if it's directly a network error
+	// Handle both direct net.Error and wrapped url.Error types because
+	// Go's http.Client wraps network errors in url.Error
 	if _, ok := err.(net.Error); ok {
 		return true
 	}
@@ -88,7 +91,8 @@ func (m *DisconnectMiddleware) isNetworkError(err error) bool {
 		}
 	}
 
-	// Check error strings for typical disconnection messages
+	// Fallback to string matching when type assertions fail - necessary because
+	// some network errors don't implement net.Error interface
 	errStr := err.Error()
 	return strings.Contains(errStr, "connection refused") ||
 		strings.Contains(errStr, "no such host") ||

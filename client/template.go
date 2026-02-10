@@ -8,14 +8,12 @@ import (
 	"github.com/epheo/anytype-go"
 )
 
-// TemplateClientImpl implements the TemplateClient interface
 type TemplateClientImpl struct {
 	client  *ClientImpl
 	spaceID string
 	typeID  string
 }
 
-// List retrieves all templates for a type
 func (tc *TemplateClientImpl) List(ctx context.Context) ([]anytype.Template, error) {
 	endpoint := fmt.Sprintf("/spaces/%s/types/%s/templates", tc.spaceID, tc.typeID)
 
@@ -41,7 +39,6 @@ func (tc *TemplateClientImpl) List(ctx context.Context) ([]anytype.Template, err
 	return response.Data, nil
 }
 
-// Get retrieves a specific template by ID
 func (tc *TemplateClientImpl) Get(ctx context.Context, templateID string) (*anytype.Template, error) {
 	endpoint := fmt.Sprintf("/spaces/%s/types/%s/templates/%s", tc.spaceID, tc.typeID, templateID)
 
@@ -61,7 +58,6 @@ func (tc *TemplateClientImpl) Get(ctx context.Context, templateID string) (*anyt
 	return &response.Template, nil
 }
 
-// TemplateContextImpl implements the TemplateContext interface
 type TemplateContextImpl struct {
 	client     *ClientImpl
 	spaceID    string
@@ -69,7 +65,6 @@ type TemplateContextImpl struct {
 	templateID string
 }
 
-// Get retrieves details of this specific template
 func (tc *TemplateContextImpl) Get(ctx context.Context) (*anytype.TemplateResponse, error) {
 	endpoint := fmt.Sprintf("/spaces/%s/types/%s/templates/%s", tc.spaceID, tc.typeID, tc.templateID)
 

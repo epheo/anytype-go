@@ -1,4 +1,3 @@
-// Package client implements the client interfaces defined in the anytype package
 package client
 
 import (
@@ -9,26 +8,21 @@ import (
 	"github.com/epheo/anytype-go"
 )
 
-// SpaceClientImpl implements the SpaceClient interface
 type SpaceClientImpl struct {
 	client *ClientImpl
 }
 
-// Create creates a new space
 func (sc *SpaceClientImpl) Create(ctx context.Context, request anytype.CreateSpaceRequest) (*anytype.CreateSpaceResponse, error) {
-	// Encode the request as JSON payload
 	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create HTTP request
 	req, err := sc.client.newRequest(ctx, http.MethodPost, "/spaces", jsonData)
 	if err != nil {
 		return nil, err
 	}
 
-	// Make the request and parse the response
 	response := &anytype.CreateSpaceResponse{}
 	err = sc.client.doRequest(req, response)
 	if err != nil {
@@ -38,15 +32,12 @@ func (sc *SpaceClientImpl) Create(ctx context.Context, request anytype.CreateSpa
 	return response, nil
 }
 
-// List returns all spaces accessible to the user
 func (sc *SpaceClientImpl) List(ctx context.Context) (*anytype.SpaceListResponse, error) {
-	// Create HTTP request
 	req, err := sc.client.newRequest(ctx, http.MethodGet, "/spaces", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// Make the request and parse the response
 	response := &anytype.SpaceListResponse{}
 	err = sc.client.doRequest(req, response)
 	if err != nil {
@@ -56,13 +47,11 @@ func (sc *SpaceClientImpl) List(ctx context.Context) (*anytype.SpaceListResponse
 	return response, nil
 }
 
-// SpaceContextImpl implements the SpaceContext interface
 type SpaceContextImpl struct {
 	client  *ClientImpl
 	spaceID string
 }
 
-// Lists returns a ListClient for this space
 func (sc *SpaceContextImpl) Lists() anytype.ListClient {
 	return &ListClientImpl{
 		client:  sc.client,
@@ -70,16 +59,13 @@ func (sc *SpaceContextImpl) Lists() anytype.ListClient {
 	}
 }
 
-// Get retrieves information about this space
 func (sc *SpaceContextImpl) Get(ctx context.Context) (*anytype.SpaceResponse, error) {
-	// Create HTTP request
 	endpoint := "/spaces/" + sc.spaceID
 	req, err := sc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// Make the request and parse the response
 	response := &anytype.SpaceResponse{}
 	err = sc.client.doRequest(req, response)
 	if err != nil {
@@ -89,7 +75,6 @@ func (sc *SpaceContextImpl) Get(ctx context.Context) (*anytype.SpaceResponse, er
 	return response, nil
 }
 
-// Objects returns an ObjectClient for this space
 func (sc *SpaceContextImpl) Objects() anytype.ObjectClient {
 	return &ObjectClientImpl{
 		client:  sc.client,
@@ -97,7 +82,6 @@ func (sc *SpaceContextImpl) Objects() anytype.ObjectClient {
 	}
 }
 
-// Object returns an ObjectContext for a specific object in this space
 func (sc *SpaceContextImpl) Object(objectID string) anytype.ObjectContext {
 	return &ObjectContextImpl{
 		client:   sc.client,
@@ -106,7 +90,6 @@ func (sc *SpaceContextImpl) Object(objectID string) anytype.ObjectContext {
 	}
 }
 
-// List returns a ListContext for a specific list in this space
 func (sc *SpaceContextImpl) List(listID string) anytype.ListContext {
 	return &ListContextImpl{
 		client:  sc.client,
@@ -115,7 +98,6 @@ func (sc *SpaceContextImpl) List(listID string) anytype.ListContext {
 	}
 }
 
-// Types returns a TypeClient for this space
 func (sc *SpaceContextImpl) Types() anytype.TypeClient {
 	return &TypeClientImpl{
 		client:  sc.client,
@@ -123,7 +105,6 @@ func (sc *SpaceContextImpl) Types() anytype.TypeClient {
 	}
 }
 
-// Type returns a TypeContext for a specific type in this space
 func (sc *SpaceContextImpl) Type(typeID string) anytype.TypeContext {
 	return &TypeContextImpl{
 		client:  sc.client,
@@ -132,18 +113,14 @@ func (sc *SpaceContextImpl) Type(typeID string) anytype.TypeContext {
 	}
 }
 
-// Search searches for objects within this space
 func (sc *SpaceContextImpl) Search(ctx context.Context, request anytype.SearchRequest) (*anytype.SearchResponse, error) {
 	endpoint := "/spaces/" + sc.spaceID + "/search"
 
-	// Create HTTP request with the request struct directly
-	// The newRequest method will handle JSON marshaling
 	req, err := sc.client.newRequest(ctx, http.MethodPost, endpoint, request)
 	if err != nil {
 		return nil, err
 	}
 
-	// Make the request and parse the response
 	response := &anytype.SearchResponse{}
 	err = sc.client.doRequest(req, response)
 	if err != nil {
@@ -153,7 +130,6 @@ func (sc *SpaceContextImpl) Search(ctx context.Context, request anytype.SearchRe
 	return response, nil
 }
 
-// Members returns a MemberClient for this space
 func (sc *SpaceContextImpl) Members() anytype.MemberClient {
 	return &MemberClientImpl{
 		client:  sc.client,
@@ -161,7 +137,6 @@ func (sc *SpaceContextImpl) Members() anytype.MemberClient {
 	}
 }
 
-// Member returns a MemberContext for a specific member in this space
 func (sc *SpaceContextImpl) Member(memberID string) anytype.MemberContext {
 	return &MemberContextImpl{
 		client:   sc.client,

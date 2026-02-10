@@ -4,28 +4,19 @@ import (
 	"context"
 )
 
-// PropertyClient provides operations on properties of an object
 type PropertyClient interface {
-	// Get retrieves a specific property value
 	Get(ctx context.Context, key string) (*Property, error)
-
-	// Set sets a property value
 	Set(ctx context.Context, key string, value interface{}) error
-
-	// Delete removes a property
 	Delete(ctx context.Context, key string) error
-
-	// List returns all properties of the object
 	List(ctx context.Context) ([]Property, error)
 }
 
-// Property represents an object property
 type Property struct {
 	ID          string   `json:"id,omitempty"`
 	Format      string   `json:"format,omitempty"`
 	Key         string   `json:"key,omitempty"`
 	Name        string   `json:"name,omitempty"`
-	Object      string   `json:"object,omitempty"` // Data model of the object, e.g., "property"
+	Object      string   `json:"object,omitempty"`
 	Text        string   `json:"text,omitempty"`
 	Number      float64  `json:"number,omitempty"`
 	Checkbox    bool     `json:"checkbox,omitempty"`
@@ -33,23 +24,21 @@ type Property struct {
 	URL         string   `json:"url,omitempty"`
 	Email       string   `json:"email,omitempty"`
 	Phone       string   `json:"phone,omitempty"`
-	Files       []string `json:"files,omitempty"` // Changed from File to Files to match API
+	Files       []string `json:"files,omitempty"`
 	Select      *Tag     `json:"select,omitempty"`
 	MultiSelect []Tag    `json:"multi_select,omitempty"`
-	Objects     []string `json:"objects,omitempty"` // Changed from ObjectLinks to Objects
+	Objects     []string `json:"objects,omitempty"`
 	Required    bool     `json:"required,omitempty"`
 }
 
-// Tag represents a select or multi-select value option
 type Tag struct {
 	ID     string `json:"id,omitempty"`
-	Key    string `json:"key,omitempty"` // Added key field from API definition
+	Key    string `json:"key,omitempty"`
 	Name   string `json:"name,omitempty"`
 	Color  string `json:"color,omitempty"`
-	Object string `json:"object,omitempty"` // Data model identifier
+	Object string `json:"object,omitempty"`
 }
 
-// Relation represents a relation within a property
 type Relation struct {
 	ID       string
 	Type     string

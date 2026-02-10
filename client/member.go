@@ -8,13 +8,11 @@ import (
 	"github.com/epheo/anytype-go/options"
 )
 
-// MemberClientImpl implements the MemberClient interface
 type MemberClientImpl struct {
 	client  *ClientImpl
 	spaceID string
 }
 
-// List returns all members in the space
 func (mc *MemberClientImpl) List(ctx context.Context) (*anytype.MemberListResponse, error) {
 	path := "/spaces/" + mc.spaceID + "/members"
 
@@ -37,14 +35,12 @@ func (mc *MemberClientImpl) List(ctx context.Context) (*anytype.MemberListRespon
 	}, nil
 }
 
-// MemberContextImpl implements the MemberContext interface
 type MemberContextImpl struct {
 	client   *ClientImpl
 	spaceID  string
 	memberID string
 }
 
-// Get retrieves details about this member
 func (mc *MemberContextImpl) Get(ctx context.Context) (*anytype.MemberResponse, error) {
 	path := "/spaces/" + mc.spaceID + "/members/" + mc.memberID
 
