@@ -36,17 +36,15 @@ type TypeContext interface {
 
 // Type represents an object type in Anytype
 type Type struct {
-	Key               string
-	Name              string
-	Description       string
-	Icon              *Icon
-	Layout            string
-	RecommendedLayout string `json:"recommended_layout"`
-	IsArchived        bool   `json:"is_archived"`
-	IsHidden          bool   `json:"is_hidden"`
-
-	// Available property definitions for this type
-	PropertyDefinitions []PropertyDefinition `json:"property_definitions"`
+	ID         string     `json:"id"`
+	Key        string     `json:"key"`
+	Name       string     `json:"name"`
+	Object     string     `json:"object"` // Data model identifier
+	Icon       *Icon      `json:"icon,omitempty"`
+	Layout     string     `json:"layout"`
+	Archived   bool       `json:"archived"`
+	PluralName string     `json:"plural_name,omitempty"`
+	Properties []Property `json:"properties,omitempty"`
 }
 
 // PropertyDefinition defines a property that can be used with a type

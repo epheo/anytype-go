@@ -46,9 +46,9 @@ Anytype-Go provides a Go SDK for interacting with Anytype's local API. This SDK 
 
 ## 🔄 API Version Support
 
-This SDK is compatible with Anytype API version `2025-04-22`. The SDK follows Anytype's API versioning scheme, which uses date-based versioning for stability and compatibility:
+This SDK is compatible with Anytype API version `2025-11-08`. The SDK follows Anytype's API versioning scheme, which uses date-based versioning for stability and compatibility:
 
-- All API requests include the `Anytype-Version` header set to `2025-04-22`
+- All API requests include the `Anytype-Version` header set to `2025-11-08`
 - Type keys such as `page` and `collection` follow the latest API specification
 - Authentication uses the app key Bearer token method
 
@@ -310,7 +310,7 @@ For detailed API documentation, see [GoDoc](https://godoc.org/github.com/epheo/a
 - **Authentication Failures**: Verify your app key
 - **Connection Issues**: Ensure Anytype is running locally
 - **Rate Limiting**: Implement backoff if making many requests
-- **API Version Mismatch**: If you get errors about unknown fields or unexpected responses, check that your Anytype app version is compatible with the API version this SDK supports (2025-04-22)
+- **API Version Mismatch**: If you get errors about unknown fields or unexpected responses, check that your Anytype app version is compatible with the API version this SDK supports (2025-11-08)
 
 ## 🧪 Testing
 

@@ -190,10 +190,10 @@ func workWithObjectTypes(ctx context.Context, client anytype.Client, spaceID str
 	}
 
 	// Display the type information we already have from the List() call
-	fmt.Printf("Page type details: Name=%s, Key=%s, RecommendedLayout=%s\n",
+	fmt.Printf("Page type details: Name=%s, Key=%s, Layout=%s\n",
 		pageType.Name,
 		pageType.Key,
-		pageType.RecommendedLayout)
+		pageType.Layout)
 
 	return pageType.Key
 }
@@ -270,10 +270,10 @@ func workWithTypes(ctx context.Context, client anytype.Client, spaceID string) e
 	}
 
 	fmt.Printf("Created type: %s (Key: %s)\n", newType.Type.Name, newType.Type.Key)
-	fmt.Printf("Type description: %s\n", newType.Type.Description)
-	fmt.Printf("Type has %d property definitions\n", len(newType.Type.PropertyDefinitions))
+	fmt.Printf("Type layout: %s\n", newType.Type.Layout)
+	fmt.Printf("Type has %d properties\n", len(newType.Type.Properties))
 
-	for _, prop := range newType.Type.PropertyDefinitions {
+	for _, prop := range newType.Type.Properties {
 		fmt.Printf("  - Property: %s (%s) - Format: %s\n", prop.Name, prop.Key, prop.Format)
 	}
 
@@ -286,18 +286,16 @@ func workWithTypes(ctx context.Context, client anytype.Client, spaceID string) e
 			Format: anytype.IconFormatEmoji,
 			Emoji:  "💻",
 		},
-		Properties: []map[string]any{
+		Properties: []anytype.PropertyLinkWithValue{
 			{
-				"key":    "price",
-				"number": 1299.99,
+				Key:    "price",
+				Number: func(v float64) *float64 { return &v }(1299.99),
 			},
+			// Note: For multi-select, we'd need to create tags first or use existing tag IDs
+			// Skipping the tag field for now since it requires pre-existing tag options
 			{
-				"key":  "category",
-				"text": "Electronics",
-			},
-			{
-				"key":  "description",
-				"text": "High-performance gaming laptop with advanced graphics card.",
+				Key:  "description",
+				Text: func(v string) *string { return &v }("High-performance gaming laptop with advanced graphics card."),
 			},
 		},
 	}

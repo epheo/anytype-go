@@ -21,22 +21,28 @@ func NewMockTypeService() *MockTypeService {
 		ListFunc: func(ctx context.Context) ([]anytype.Type, error) {
 			return []anytype.Type{
 				{
-					Key:         "page",
-					Name:        "Page",
-					Description: "A basic page type",
+					ID:     "type_page_id",
+					Key:    "page",
+					Name:   "Page",
+					Object: "type",
+					Layout: "basic",
 				},
 				{
-					Key:         "collection",
-					Name:        "Collection",
-					Description: "A collection type",
+					ID:     "type_collection_id",
+					Key:    "collection",
+					Name:   "Collection",
+					Object: "type",
+					Layout: "set",
 				},
 			}, nil
 		},
 		GetFunc: func(ctx context.Context, typeKey string) (*anytype.Type, error) {
 			return &anytype.Type{
-				Key:         typeKey,
-				Name:        "Page",
-				Description: "A basic page type",
+				ID:     "type_" + typeKey + "_id",
+				Key:    typeKey,
+				Name:   "Page",
+				Object: "type",
+				Layout: "basic",
 			}, nil
 		},
 		GetKeyByNameFunc: func(ctx context.Context, name string) (string, error) {
@@ -97,9 +103,11 @@ func NewMockTypeContextService(typeID string) *MockTypeContextService {
 		GetFunc: func(ctx context.Context) (*anytype.TypeResponse, error) {
 			return &anytype.TypeResponse{
 				Type: anytype.Type{
-					Key:         typeID,
-					Name:        "Page",
-					Description: "A basic page type",
+					ID:     "type_" + typeID + "_id",
+					Key:    typeID,
+					Name:   "Page",
+					Object: "type",
+					Layout: "basic",
 				},
 			}, nil
 		},

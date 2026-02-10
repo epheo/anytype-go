@@ -45,9 +45,10 @@ type MemberStatus string
 
 const (
 	// Member roles
-	MemberRoleViewer MemberRole = "viewer"
-	MemberRoleEditor MemberRole = "editor"
-	MemberRoleOwner  MemberRole = "owner"
+	MemberRoleViewer       MemberRole = "viewer"
+	MemberRoleEditor       MemberRole = "editor"
+	MemberRoleOwner        MemberRole = "owner"
+	MemberRoleNoPermission MemberRole = "no_permission"
 
 	// Member statuses
 	MemberStatusJoining  MemberStatus = "joining"

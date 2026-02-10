@@ -48,15 +48,20 @@ type SpaceContext interface {
 
 // Space represents an Anytype workspace/space
 type Space struct {
-	ID           string
-	Name         string
-	Description  string
-	Icon         *Icon
-	HomeID       string `json:"home_id"`
-	ArchiveID    string `json:"archive_id"`
-	ProfileID    string `json:"profile_id"`
-	CreatedAt    int64  `json:"created_at"`
-	LastOpenedAt int64  `json:"last_opened_at"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Icon        *Icon  `json:"icon,omitempty"`
+	NetworkID   string `json:"network_id,omitempty"`
+	GatewayURL  string `json:"gateway_url,omitempty"`
+	Object      string `json:"object"` // Data model identifier (enum: "space", "chat")
+
+	// Legacy fields - may be removed in future versions
+	HomeID       string `json:"home_id,omitempty"`
+	ArchiveID    string `json:"archive_id,omitempty"`
+	ProfileID    string `json:"profile_id,omitempty"`
+	CreatedAt    int64  `json:"created_at,omitempty"`
+	LastOpenedAt int64  `json:"last_opened_at,omitempty"`
 }
 
 // SpaceListResponse represents the response from List spaces

@@ -49,26 +49,37 @@ type ObjectResponse struct {
 
 // CreateObjectRequest contains parameters for creating a new object
 type CreateObjectRequest struct {
-	TypeKey    string `json:"type_key"`
-	Name       string
-	Body       string
-	Icon       *Icon
-	TemplateID string           `json:"template_id,omitempty"`
-	Properties []map[string]any `json:"properties"`
+	TypeKey    string                 `json:"type_key"`
+	Name       string                 `json:"name,omitempty"`
+	Body       string                 `json:"body,omitempty"`
+	Icon       *Icon                  `json:"icon,omitempty"`
+	TemplateID string                 `json:"template_id,omitempty"`
+	Properties []PropertyLinkWithValue `json:"properties,omitempty"`
 }
 
 // UpdateObjectRequest contains parameters for updating an object
 type UpdateObjectRequest struct {
-	Name        string
-	Description string
-	Icon        *Icon
-	Properties  []PropertyUpdateRequest
+	Name       string                 `json:"name,omitempty"`
+	Markdown   string                 `json:"markdown,omitempty"`
+	Icon       *Icon                  `json:"icon,omitempty"`
+	TypeKey    string                 `json:"type_key,omitempty"`
+	Properties []PropertyLinkWithValue `json:"properties,omitempty"`
 }
 
-// PropertyUpdateRequest contains parameters for updating a property
-type PropertyUpdateRequest struct {
-	Key   string
-	Value interface{}
+// PropertyLinkWithValue represents a property key-value pair for object creation/update
+type PropertyLinkWithValue struct {
+	Key         string      `json:"key"`
+	Text        *string     `json:"text,omitempty"`
+	Number      *float64    `json:"number,omitempty"`
+	Checkbox    *bool       `json:"checkbox,omitempty"`
+	Date        *int64      `json:"date,omitempty"`
+	URL         *string     `json:"url,omitempty"`
+	Email       *string     `json:"email,omitempty"`
+	Phone       *string     `json:"phone,omitempty"`
+	Files       []string    `json:"files,omitempty"`
+	Select      *string     `json:"select,omitempty"`
+	MultiSelect []string    `json:"multi_select,omitempty"`
+	Objects     []string    `json:"objects,omitempty"`
 }
 
 // IconFormat represents the type of icon
