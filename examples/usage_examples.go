@@ -61,10 +61,13 @@ func main() {
 		return
 	}
 
-	// Step 8: Searching for objects
+	// Step 8: Working with properties and tags
+	workWithProperties(ctx, client, spaceID)
+
+	// Step 9: Searching for objects
 	searchObjects(ctx, client, spaceID)
 
-	// Step 9: Working with members
+	// Step 10: Working with members
 	workWithMembers(ctx, client, spaceID)
 
 	fmt.Println("\nSuccessfully completed all example operations!")
@@ -190,10 +193,10 @@ func workWithObjectTypes(ctx context.Context, client anytype.Client, spaceID str
 	}
 
 	// Display the type information we already have from the List() call
-	fmt.Printf("Page type details: Name=%s, Key=%s, RecommendedLayout=%s\n",
+	fmt.Printf("Page type details: Name=%s, Key=%s, Layout=%s\n",
 		pageType.Name,
 		pageType.Key,
-		pageType.RecommendedLayout)
+		pageType.Layout)
 
 	return pageType.Key
 }
@@ -231,7 +234,7 @@ func workWithTemplates(ctx context.Context, client anytype.Client, spaceID, type
 	return template.ID
 }
 
-// workWithObjects demonstrates operations with objects
+// workWithTypes demonstrates creating custom types and objects of those types
 func workWithTypes(ctx context.Context, client anytype.Client, spaceID string) error {
 	fmt.Println("\n=== Working with Types ===")
 
@@ -270,10 +273,10 @@ func workWithTypes(ctx context.Context, client anytype.Client, spaceID string) e
 	}
 
 	fmt.Printf("Created type: %s (Key: %s)\n", newType.Type.Name, newType.Type.Key)
-	fmt.Printf("Type description: %s\n", newType.Type.Description)
-	fmt.Printf("Type has %d property definitions\n", len(newType.Type.PropertyDefinitions))
+	fmt.Printf("Type layout: %s\n", newType.Type.Layout)
+	fmt.Printf("Type has %d properties\n", len(newType.Type.Properties))
 
-	for _, prop := range newType.Type.PropertyDefinitions {
+	for _, prop := range newType.Type.Properties {
 		fmt.Printf("  - Property: %s (%s) - Format: %s\n", prop.Name, prop.Key, prop.Format)
 	}
 
@@ -286,18 +289,16 @@ func workWithTypes(ctx context.Context, client anytype.Client, spaceID string) e
 			Format: anytype.IconFormatEmoji,
 			Emoji:  "💻",
 		},
-		Properties: []map[string]any{
+		Properties: []anytype.PropertyLinkWithValue{
 			{
-				"key":    "price",
-				"number": 1299.99,
+				Key:    "price",
+				Number: func(v float64) *float64 { return &v }(1299.99),
 			},
+			// Note: For multi-select, we'd need to create tags first or use existing tag IDs
+			// Skipping the tag field for now since it requires pre-existing tag options
 			{
-				"key":  "category",
-				"text": "Electronics",
-			},
-			{
-				"key":  "description",
-				"text": "High-performance gaming laptop with advanced graphics card.",
+				Key:  "description",
+				Text: func(v string) *string { return &v }("High-performance gaming laptop with advanced graphics card."),
 			},
 		},
 	}
@@ -321,10 +322,19 @@ func workWithTypes(ctx context.Context, client anytype.Client, spaceID string) e
 		fmt.Printf("  Type: %s\n", objectDetails.Object.Type.Name)
 		if objectDetails.Object.Properties != nil {
 			fmt.Printf("  Properties:\n")
-			for _, value := range objectDetails.Object.Properties {
-				fmt.Printf("    %s: %+v\n", value.Key, value)
+			for _, prop := range objectDetails.Object.Properties {
+				fmt.Printf("    %s: %s\n", prop.Name, formatPropertyValue(prop))
 			}
 		}
+	}
+
+	// Clean up the object we created
+	fmt.Println("\nCleaning up custom type object...")
+	_, err = client.Space(spaceID).Object(objectID).Delete(ctx)
+	if err != nil {
+		log.Printf("Failed to delete object: %v", err)
+	} else {
+		fmt.Printf("Deleted object: %s\n", newObject.Object.Name)
 	}
 
 	return nil
@@ -383,13 +393,25 @@ func workWithObjects(ctx context.Context, client anytype.Client, spaceID, templa
 		objectDetails.Object.Name,
 		objectDetails.Object.Type.Name)
 
-	// Export the object to markdown
-	fmt.Println("Exporting object to markdown...")
-	exportResp, err := client.Space(spaceID).Object(objectID).Export(ctx, "markdown")
+	// Update the object
+	fmt.Println("Updating the object...")
+	updatedObject, err := client.Space(spaceID).Object(objectID).Update(ctx, anytype.UpdateObjectRequest{
+		Name:     "Go SDK Example Page (Updated)",
+		Markdown: "# Go SDK Example (Updated)\n\nThis page was updated using the Anytype Go SDK.\n\n## Features\n\n- Easy authentication\n- Space management\n- Object creation, update, and deletion\n- Search capabilities",
+	})
 	if err != nil {
-		log.Printf("Failed to export object: %v", err)
+		log.Printf("Failed to update object: %v", err)
 	} else {
-		fmt.Printf("Markdown export preview: %s\n", previewText(exportResp.Markdown, 100))
+		fmt.Printf("Updated object name: %s\n", updatedObject.Object.Name)
+	}
+
+	// Get object as markdown
+	fmt.Println("Getting object as markdown...")
+	exportResp, err := client.Space(spaceID).Object(objectID).Get(ctx, anytype.WithFormat("md"))
+	if err != nil {
+		log.Printf("Failed to get object as markdown: %v", err)
+	} else {
+		fmt.Printf("Markdown export preview: %s\n", safeSubstring(exportResp.Object.Markdown, 100))
 	}
 
 	// Create a temporary object to demonstrate deletion
@@ -410,14 +432,21 @@ func workWithObjects(ctx context.Context, client anytype.Client, spaceID, templa
 
 		// Delete the temporary object
 		fmt.Printf("Deleting temporary object...\n")
-		deletedObject, err := client.Space(spaceID).Object(tempObjectID).Delete(ctx)
+		_, err = client.Space(spaceID).Object(tempObjectID).Delete(ctx)
 		if err != nil {
 			log.Printf("Failed to delete object: %v", err)
 		} else {
-			fmt.Printf("Successfully deleted object: %s (archived status: %v)\n",
-				deletedObject.Object.Name,
-				deletedObject.Object.Archived)
+			fmt.Printf("Successfully deleted object: %s\n", tempObject.Object.Name)
 		}
+	}
+
+	// Clean up the example page
+	fmt.Println("Cleaning up example page...")
+	_, err = client.Space(spaceID).Object(objectID).Delete(ctx)
+	if err != nil {
+		log.Printf("Failed to delete example page: %v", err)
+	} else {
+		fmt.Printf("Deleted object: %s\n", newObject.Object.Name)
 	}
 
 	return objectID
@@ -427,34 +456,23 @@ func workWithObjects(ctx context.Context, client anytype.Client, spaceID, templa
 func workWithLists(ctx context.Context, client anytype.Client, spaceID, objectID string) string {
 	fmt.Println("\n=== Working with Lists and Views ===")
 
-	// For this example, we'll just show how to list views for a list object
-	// In a real application, you'd likely search for a collection or create one
-
-	fmt.Println("Finding a list in the current space...")
-	searchResp, err := client.Space(spaceID).Search(ctx, anytype.SearchRequest{
-		Types: []string{"collection"}, // Search for objects of type: Collection
+	// Create a collection for this demo
+	fmt.Println("Creating a collection...")
+	collectionResp, err := client.Space(spaceID).Objects().Create(ctx, anytype.CreateObjectRequest{
+		TypeKey: "collection",
+		Name:    "SDK Demo Collection",
+		Icon: &anytype.Icon{
+			Format: anytype.IconFormatEmoji,
+			Emoji:  "📋",
+		},
 	})
-	if err != nil || len(searchResp.Data) == 0 {
-		log.Printf("No collection objects found for demonstration")
+	if err != nil {
+		log.Printf("Failed to create collection: %v", err)
 		return ""
 	}
 
-	// Find a collection object
-	var listID string
-	for _, obj := range searchResp.Data {
-		// Could add more sophisticated detection here
-		if obj.Layout == "collection" || obj.Layout == "list" {
-			listID = obj.ID
-			break
-		}
-	}
-
-	if listID == "" {
-		log.Printf("No suitable list object found")
-		return ""
-	}
-
-	fmt.Printf("Found list object with ID: %s\n", listID)
+	listID := collectionResp.Object.ID
+	fmt.Printf("Created collection: %s (ID: %s)\n", collectionResp.Object.Name, listID)
 
 	// Get views for the list
 	viewsResp, err := client.Space(spaceID).List(listID).Views().List(ctx)
@@ -499,7 +517,98 @@ func workWithLists(ctx context.Context, client anytype.Client, spaceID, objectID
 		}
 	}
 
+	// Clean up the collection
+	fmt.Println("Cleaning up collection...")
+	_, err = client.Space(spaceID).Object(listID).Delete(ctx)
+	if err != nil {
+		log.Printf("Failed to delete collection: %v", err)
+	} else {
+		fmt.Printf("Deleted collection: %s\n", collectionResp.Object.Name)
+	}
+
 	return listID
+}
+
+// workWithProperties demonstrates space-level property and tag management
+func workWithProperties(ctx context.Context, client anytype.Client, spaceID string) {
+	fmt.Println("\n=== Working with Properties and Tags ===")
+
+	// List existing properties
+	fmt.Println("Listing space properties...")
+	properties, err := client.Space(spaceID).Properties().List(ctx)
+	if err != nil {
+		log.Printf("Failed to list properties: %v", err)
+		return
+	}
+	fmt.Printf("Found %d properties in space\n", len(properties))
+
+	// Create a multi-select property with tags
+	fmt.Println("Creating a multi-select property with tags...")
+	propResp, err := client.Space(spaceID).Properties().Create(ctx, anytype.CreatePropertyRequest{
+		Name:   "Priority",
+		Format: "multi_select",
+		Tags: []anytype.CreateTagRequest{
+			{Name: "High", Color: "red"},
+			{Name: "Medium", Color: "orange"},
+			{Name: "Low", Color: "blue"},
+		},
+	})
+	if err != nil {
+		log.Printf("Failed to create property: %v", err)
+		return
+	}
+	fmt.Printf("Created property: %s (Key: %s, Format: %s)\n",
+		propResp.Property.Name, propResp.Property.Key, propResp.Property.Format)
+
+	// Get the property details
+	propDetails, err := client.Space(spaceID).Property(propResp.Property.ID).Get(ctx)
+	if err != nil {
+		log.Printf("Failed to get property details: %v", err)
+	} else {
+		fmt.Printf("Property details: %s (Format: %s)\n",
+			propDetails.Property.Name, propDetails.Property.Format)
+	}
+
+	// List tags on this property
+	fmt.Println("Listing tags on the property...")
+	tags, err := client.Space(spaceID).Property(propResp.Property.ID).Tags().List(ctx)
+	if err != nil {
+		log.Printf("Failed to list tags: %v", err)
+	} else {
+		fmt.Printf("Found %d tags\n", len(tags))
+		for _, tag := range tags {
+			fmt.Printf("  - %s (Color: %s)\n", tag.Name, tag.Color)
+		}
+	}
+
+	// Add a new tag to the property
+	fmt.Println("Adding a new tag...")
+	newTag, err := client.Space(spaceID).Property(propResp.Property.ID).Tags().Create(ctx, anytype.CreateTagRequest{
+		Name:  "Critical",
+		Color: "red",
+	})
+	if err != nil {
+		log.Printf("Failed to create tag: %v", err)
+	} else {
+		fmt.Printf("Created tag: %s (Color: %s)\n", newTag.Tag.Name, newTag.Tag.Color)
+
+		// Clean up the tag
+		_, err = client.Space(spaceID).Property(propResp.Property.ID).Tag(newTag.Tag.ID).Delete(ctx)
+		if err != nil {
+			log.Printf("Failed to delete tag: %v", err)
+		} else {
+			fmt.Printf("Deleted tag: %s\n", newTag.Tag.Name)
+		}
+	}
+
+	// Clean up the property
+	fmt.Println("Cleaning up property...")
+	_, err = client.Space(spaceID).Property(propResp.Property.ID).Delete(ctx)
+	if err != nil {
+		log.Printf("Failed to delete property: %v", err)
+	} else {
+		fmt.Printf("Deleted property: %s\n", propResp.Property.Name)
+	}
 }
 
 // searchObjects demonstrates the search functionality
@@ -595,12 +704,42 @@ func workWithMembers(ctx context.Context, client anytype.Client, spaceID string)
 	}
 }
 
-// previewText returns a preview of a longer text string
-func previewText(text string, maxLen int) string {
-	if len(text) <= maxLen {
-		return text
+// formatPropertyValue returns a human-readable string for a property based on its format
+func formatPropertyValue(prop anytype.Property) string {
+	switch prop.Format {
+	case "text":
+		return prop.Text
+	case "number":
+		return fmt.Sprintf("%g", prop.Number)
+	case "checkbox":
+		return fmt.Sprintf("%v", prop.Checkbox)
+	case "date":
+		return prop.Date
+	case "url":
+		return prop.URL
+	case "email":
+		return prop.Email
+	case "phone":
+		return prop.Phone
+	case "objects":
+		if len(prop.Objects) == 0 {
+			return "[]"
+		}
+		return fmt.Sprintf("%v", prop.Objects)
+	case "multi_select":
+		names := make([]string, len(prop.MultiSelect))
+		for i, tag := range prop.MultiSelect {
+			names[i] = tag.Name
+		}
+		return fmt.Sprintf("%v", names)
+	case "select":
+		if prop.Select != nil {
+			return prop.Select.Name
+		}
+		return ""
+	default:
+		return fmt.Sprintf("(%s)", prop.Format)
 	}
-	return text[:maxLen] + "..."
 }
 
 // safeSubstring returns a substring safely handling empty strings

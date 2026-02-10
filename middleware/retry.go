@@ -27,7 +27,7 @@ func DefaultRetryConfig() RetryConfig {
 		MaxRetries:    5,
 		RetryDelay:    200 * time.Millisecond,
 		MaxRetryDelay: 30 * time.Second,
-		ShouldRetry:   defaultShouldRetry,
+		ShouldRetry:   nil, // Will use default logic with RetryableStatusCodes
 		RetryableStatusCodes: []int{
 			http.StatusRequestTimeout,
 			http.StatusTooManyRequests,
@@ -58,17 +58,37 @@ func (m *RetryMiddleware) Do(req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 
-	// Keep a reference to the original request body
-	var bodyCloner bodyCloner
-	if req.Body != nil {
-		bodyCloner, err = newBodyCloner(req)
-		if err != nil {
-			return nil, err
-		}
+	// Try initial request first to avoid retry overhead for successful requests.
+	// Most requests succeed on first attempt, so we optimize for the happy path.
+	resp, err = m.Next.Do(req)
+
+	// Check if we need to retry
+	if !m.shouldRetry(resp, err) {
+		return resp, err
 	}
 
-	// Try the initial request
-	resp, err = m.Next.Do(req)
+	// Prepare body for retries if needed
+	var getBody func() (io.ReadCloser, error)
+	if req.Body != nil {
+		// Use GetBody if available (avoids reading entire body into memory for large requests)
+		if req.GetBody != nil {
+			getBody = req.GetBody
+		} else {
+			// Fall back to manual body cloning when GetBody is unavailable
+			// (e.g., custom io.Reader implementations)
+			bodyBytes, readErr := io.ReadAll(req.Body)
+			if readErr != nil {
+				return nil, readErr
+			}
+			req.Body.Close()
+			// Set up getBody function for retries
+			getBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+			}
+			// Reset body for first retry
+			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		}
+	}
 
 	// Retry loop
 	retries := 0
@@ -83,10 +103,13 @@ func (m *RetryMiddleware) Do(req *http.Request) (*http.Response, error) {
 			// Continue with retry
 		}
 
-		// Clone the request to ensure it's fresh for retry
-		retryReq, cloneErr := cloneRequest(req, bodyCloner)
-		if cloneErr != nil {
-			return resp, cloneErr
+		// Clone the request for retry
+		retryReq := req.Clone(req.Context())
+		if getBody != nil {
+			retryReq.Body, err = getBody()
+			if err != nil {
+				return resp, err
+			}
 		}
 
 		// Execute the retry
@@ -102,26 +125,22 @@ func (m *RetryMiddleware) shouldRetry(resp *http.Response, err error) bool {
 	if m.Config.ShouldRetry != nil {
 		return m.Config.ShouldRetry(resp, err)
 	}
-	return defaultShouldRetry(resp, err)
+	return m.defaultShouldRetry(resp, err)
 }
 
-// defaultShouldRetry provides default retry logic
-func defaultShouldRetry(resp *http.Response, err error) bool {
+// defaultShouldRetry provides default retry logic using configured status codes
+func (m *RetryMiddleware) defaultShouldRetry(resp *http.Response, err error) bool {
 	// Retry on connection errors
 	if err != nil {
 		return true
 	}
 
-	// Retry on specific status codes
+	// Retry on configured status codes
 	if resp != nil {
-		switch resp.StatusCode {
-		case http.StatusRequestTimeout,
-			http.StatusTooManyRequests,
-			http.StatusInternalServerError,
-			http.StatusBadGateway,
-			http.StatusServiceUnavailable,
-			http.StatusGatewayTimeout:
-			return true
+		for _, code := range m.Config.RetryableStatusCodes {
+			if resp.StatusCode == code {
+				return true
+			}
 		}
 	}
 
@@ -142,57 +161,11 @@ func WithCustomRetry(config RetryConfig) func(HTTPDoer) HTTPDoer {
 
 // exponentialBackoff calculates exponential backoff delay
 func exponentialBackoff(baseDelay time.Duration, retry int, maxDelay time.Duration) time.Duration {
+	// Exponential backoff: delay doubles with each retry (2^retry).
+	// Bit shift is used for efficient power-of-2 multiplication.
 	delay := baseDelay * (1 << uint(retry))
 	if delay > maxDelay {
 		delay = maxDelay
 	}
 	return delay
-}
-
-// Helper types and functions for request cloning and body preservation
-
-type bodyCloner interface {
-	cloneBody() (io.ReadCloser, error)
-}
-
-type readCloserCloner struct {
-	buf *bytes.Buffer
-}
-
-func newBodyCloner(req *http.Request) (bodyCloner, error) {
-	if req.Body == nil {
-		return nil, nil
-	}
-
-	buf := new(bytes.Buffer)
-	if _, err := buf.ReadFrom(req.Body); err != nil {
-		return nil, err
-	}
-	if err := req.Body.Close(); err != nil {
-		return nil, err
-	}
-
-	// Replace the original body with a new ReadCloser
-	req.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
-
-	return &readCloserCloner{buf: buf}, nil
-}
-
-func (c *readCloserCloner) cloneBody() (io.ReadCloser, error) {
-	return io.NopCloser(bytes.NewReader(c.buf.Bytes())), nil
-}
-
-// cloneRequest creates a clone of the request with a fresh body
-func cloneRequest(req *http.Request, bodyCloner bodyCloner) (*http.Request, error) {
-	clone := req.Clone(req.Context())
-
-	if bodyCloner != nil {
-		var err error
-		clone.Body, err = bodyCloner.cloneBody()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return clone, nil
 }

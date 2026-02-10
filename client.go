@@ -1,64 +1,106 @@
+// Package anytype provides a Go SDK for interacting with the Anytype API.
 package anytype
 
-// ClientOptions contains configuration options for the Anytype client
+type Pagination struct {
+	Total   int  `json:"total"`
+	Limit   int  `json:"limit"`
+	Offset  int  `json:"offset"`
+	HasMore bool `json:"has_more"`
+}
+
+type ListOptions struct {
+	Limit  int
+	Offset int
+}
+
+type ListOption func(*ListOptions)
+
+func WithLimit(limit int) ListOption {
+	return func(opts *ListOptions) {
+		opts.Limit = limit
+	}
+}
+
+func WithOffset(offset int) ListOption {
+	return func(opts *ListOptions) {
+		opts.Offset = offset
+	}
+}
+
+func ApplyListOptions(opts ...ListOption) ListOptions {
+	var options ListOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	return options
+}
+
+type GetOptions struct {
+	Format string
+}
+
+type GetOption func(*GetOptions)
+
+func WithFormat(format string) GetOption {
+	return func(opts *GetOptions) {
+		opts.Format = format
+	}
+}
+
+func ApplyGetOptions(opts ...GetOption) GetOptions {
+	var options GetOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	return options
+}
+
 type ClientOptions struct {
 	BaseURL string
 	AppKey  string
 }
 
-// Client is the main interface for interacting with the Anytype API
 type Client interface {
-	// Auth returns an AuthClient for authentication operations
 	Auth() AuthClient
-
-	// Spaces returns a SpaceClient for working with spaces
 	Spaces() SpaceClient
-
-	// Space returns a specific SpaceContext for working with a given space
 	Space(spaceID string) SpaceContext
-
-	// Search returns a SearchClient for global search operations
 	Search() SearchClient
 }
 
-// clientConstructor is a function type that constructs a Client
 type clientConstructor func(ClientOptions) Client
 
-// defaultClientConstructor is the default constructor for Client
+// Global constructor enables dependency injection pattern where the client implementation
+// package registers itself via init(), allowing the interface package to remain
+// implementation-agnostic while avoiding circular dependencies.
 var defaultClientConstructor clientConstructor
 
-// RegisterClientConstructor registers a constructor function for creating Client instances
 func RegisterClientConstructor(constructor clientConstructor) {
 	defaultClientConstructor = constructor
 }
 
-// ClientOption is a function type that modifies ClientOptions
 type ClientOption func(*ClientOptions)
 
-// WithBaseURL sets the base URL for API requests
 func WithBaseURL(url string) ClientOption {
 	return func(o *ClientOptions) {
 		o.BaseURL = url
 	}
 }
 
-// WithAppKey sets the app key for authentication
 func WithAppKey(appKey string) ClientOption {
 	return func(o *ClientOptions) {
 		o.AppKey = appKey
 	}
 }
 
-// NewClient creates a new Anytype API client with the given options
 func NewClient(opts ...ClientOption) Client {
 	if defaultClientConstructor == nil {
+		// Panic is intentional - this is a programming error, not a runtime error.
+		// The client package must be imported to register its constructor via init().
 		panic("No client constructor registered. Import the client implementation package.")
 	}
 
-	// Initialize with default options
 	clientOpts := ClientOptions{}
 
-	// Apply all provided options
 	for _, opt := range opts {
 		opt(&clientOpts)
 	}
@@ -66,5 +108,3 @@ func NewClient(opts ...ClientOption) Client {
 	client := defaultClientConstructor(clientOpts)
 	return client
 }
-
-// These interfaces and structs have been moved to space.go for better organization
