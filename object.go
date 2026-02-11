@@ -34,36 +34,95 @@ type ObjectResponse struct {
 }
 
 type CreateObjectRequest struct {
-	TypeKey    string                  `json:"type_key"`
-	Name       string                  `json:"name,omitempty"`
-	Body       string                  `json:"body,omitempty"`
-	Icon       *Icon                   `json:"icon,omitempty"`
-	TemplateID string                  `json:"template_id,omitempty"`
-	Properties []PropertyLinkWithValue `json:"properties,omitempty"`
+	TypeKey    string              `json:"type_key"`
+	Name       string              `json:"name,omitempty"`
+	Body       string              `json:"body,omitempty"`
+	Icon       *Icon               `json:"icon,omitempty"`
+	TemplateID string              `json:"template_id,omitempty"`
+	Properties []PropertyLinkValue `json:"properties,omitempty"`
 }
 
 type UpdateObjectRequest struct {
-	Name       string                  `json:"name,omitempty"`
-	Markdown   string                  `json:"markdown,omitempty"`
-	Icon       *Icon                   `json:"icon,omitempty"`
-	TypeKey    string                  `json:"type_key,omitempty"`
-	Properties []PropertyLinkWithValue `json:"properties,omitempty"`
+	Name       string              `json:"name,omitempty"`
+	Markdown   string              `json:"markdown,omitempty"`
+	Icon       *Icon               `json:"icon,omitempty"`
+	TypeKey    string              `json:"type_key,omitempty"`
+	Properties []PropertyLinkValue `json:"properties,omitempty"`
 }
 
-type PropertyLinkWithValue struct {
-	Key         string   `json:"key"`
-	Text        *string  `json:"text,omitempty"`
-	Number      *float64 `json:"number,omitempty"`
-	Checkbox    *bool    `json:"checkbox,omitempty"`
-	Date        *string  `json:"date,omitempty"`
-	URL         *string  `json:"url,omitempty"`
-	Email       *string  `json:"email,omitempty"`
-	Phone       *string  `json:"phone,omitempty"`
-	Files       []string `json:"files,omitempty"`
-	Select      *string  `json:"select,omitempty"`
-	MultiSelect []string `json:"multi_select,omitempty"`
-	Objects     []string `json:"objects,omitempty"`
+// PropertyLinkValue is implemented by the typed property value structs below.
+// The API requires each property to be sent as a distinct type (oneOf),
+// so that null values can be sent explicitly to clear a property.
+type PropertyLinkValue interface {
+	propertyLinkValue()
 }
+
+type TextPropertyLinkValue struct {
+	Key  string `json:"key"`
+	Text string `json:"text"`
+}
+
+type NumberPropertyLinkValue struct {
+	Key    string  `json:"key"`
+	Number float64 `json:"number"`
+}
+
+type SelectPropertyLinkValue struct {
+	Key    string  `json:"key"`
+	Select *string `json:"select"`
+}
+
+type MultiSelectPropertyLinkValue struct {
+	Key         string   `json:"key"`
+	MultiSelect []string `json:"multi_select"`
+}
+
+type DatePropertyLinkValue struct {
+	Key  string  `json:"key"`
+	Date *string `json:"date"`
+}
+
+type FilesPropertyLinkValue struct {
+	Key   string   `json:"key"`
+	Files []string `json:"files"`
+}
+
+type CheckboxPropertyLinkValue struct {
+	Key      string `json:"key"`
+	Checkbox bool   `json:"checkbox"`
+}
+
+type URLPropertyLinkValue struct {
+	Key string `json:"key"`
+	URL string `json:"url"`
+}
+
+type EmailPropertyLinkValue struct {
+	Key   string `json:"key"`
+	Email string `json:"email"`
+}
+
+type PhonePropertyLinkValue struct {
+	Key   string `json:"key"`
+	Phone string `json:"phone"`
+}
+
+type ObjectsPropertyLinkValue struct {
+	Key     string   `json:"key"`
+	Objects []string `json:"objects"`
+}
+
+func (TextPropertyLinkValue) propertyLinkValue()        {}
+func (NumberPropertyLinkValue) propertyLinkValue()      {}
+func (SelectPropertyLinkValue) propertyLinkValue()      {}
+func (MultiSelectPropertyLinkValue) propertyLinkValue() {}
+func (DatePropertyLinkValue) propertyLinkValue()        {}
+func (FilesPropertyLinkValue) propertyLinkValue()       {}
+func (CheckboxPropertyLinkValue) propertyLinkValue()    {}
+func (URLPropertyLinkValue) propertyLinkValue()         {}
+func (EmailPropertyLinkValue) propertyLinkValue()       {}
+func (PhonePropertyLinkValue) propertyLinkValue()       {}
+func (ObjectsPropertyLinkValue) propertyLinkValue()     {}
 
 type IconFormat string
 

@@ -289,17 +289,9 @@ func workWithTypes(ctx context.Context, client anytype.Client, spaceID string) e
 			Format: anytype.IconFormatEmoji,
 			Emoji:  "💻",
 		},
-		Properties: []anytype.PropertyLinkWithValue{
-			{
-				Key:    "price",
-				Number: func(v float64) *float64 { return &v }(1299.99),
-			},
-			// Note: For multi-select, we'd need to create tags first or use existing tag IDs
-			// Skipping the tag field for now since it requires pre-existing tag options
-			{
-				Key:  "description",
-				Text: func(v string) *string { return &v }("High-performance gaming laptop with advanced graphics card."),
-			},
+		Properties: []anytype.PropertyLinkValue{
+			anytype.NumberPropertyLinkValue{Key: "price", Number: 1299.99},
+			anytype.TextPropertyLinkValue{Key: "description", Text: "High-performance gaming laptop with advanced graphics card."},
 		},
 	}
 
