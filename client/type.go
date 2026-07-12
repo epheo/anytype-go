@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"iter"
 	"net/http"
 
 	"github.com/epheo/anytype-go"
@@ -13,20 +14,24 @@ type TypeClientImpl struct {
 	spaceID string
 }
 
-func (tc *TypeClientImpl) List(ctx context.Context) ([]anytype.Type, error) {
-	req, err := tc.client.newRequest(ctx, http.MethodGet, fmt.Sprintf("/spaces/%s/types", tc.spaceID), nil)
+func (tc *TypeClientImpl) List(ctx context.Context, opts ...anytype.ListOption) (*anytype.Page[anytype.Type], error) {
+	endpoint := withListParams(fmt.Sprintf("/spaces/%s/types", tc.spaceID), opts)
+
+	req, err := tc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var response struct {
-		Data []anytype.Type `json:"data"`
-	}
+	var response anytype.Page[anytype.Type]
 	if err := tc.client.doRequest(req, &response); err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return &response, nil
+}
+
+func (tc *TypeClientImpl) All(ctx context.Context, opts ...anytype.ListOption) iter.Seq2[anytype.Type, error] {
+	return paginate(ctx, tc.List, opts...)
 }
 
 func (tc *TypeClientImpl) Get(ctx context.Context, typeKey string) (*anytype.Type, error) {
@@ -45,16 +50,13 @@ func (tc *TypeClientImpl) Get(ctx context.Context, typeKey string) (*anytype.Typ
 	return &response.Type, nil
 }
 
-// GetKeyByName looks up a type key by its name
+// GetKeyByName looks up a type key by its name.
+// The API has no name-based lookup, so we scan every page and filter.
 func (tc *TypeClientImpl) GetKeyByName(ctx context.Context, name string) (string, error) {
-	types, err := tc.List(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	// Linear search is acceptable because type lists are typically small (<100 items).
-	// The API doesn't provide name-based lookup, so we must fetch all and filter.
-	for _, t := range types {
+	for t, err := range tc.All(ctx) {
+		if err != nil {
+			return "", err
+		}
 		if t.Name == name {
 			return t.Key, nil
 		}

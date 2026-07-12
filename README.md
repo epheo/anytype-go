@@ -53,7 +53,7 @@ spaces, _ := client.Spaces().List(ctx)
 space, _ := client.Space(spaceID).Get(ctx)
 
 // Objects
-objects, _ := client.Space(spaceID).Objects().List(ctx)
+objects, _ := client.Space(spaceID).Objects().List(ctx) // objects.Data, objects.Pagination
 object, _ := client.Space(spaceID).Object(objectID).Get(ctx)
 markdown, _ := client.Space(spaceID).Object(objectID).Get(ctx, anytype.WithFormat("md"))
 
@@ -83,6 +83,31 @@ results, _ := client.Space(spaceID).Search(ctx, anytype.SearchRequest{
 })
 globalResults, _ := client.Search().Search(ctx, anytype.SearchRequest{Query: "notes"})
 ```
+
+### Pagination
+
+Every `List` and `Search` returns a `*Page[T]` holding one page of `Data` plus a
+`Pagination` cursor, and accepts `WithLimit`/`WithOffset`:
+
+```go
+page, _ := client.Space(spaceID).Objects().List(ctx, anytype.WithLimit(50), anytype.WithOffset(100))
+for _, obj := range page.Data { /* ... */ }
+if page.Pagination.HasMore { /* fetch the next page */ }
+```
+
+To walk every page without managing offsets yourself, use `All`, which returns a
+Go 1.23 iterator (`iter.Seq2[T, error]`):
+
+```go
+for obj, err := range client.Space(spaceID).Objects().All(ctx) {
+    if err != nil {
+        return err
+    }
+    // ... use obj
+}
+```
+
+`All` is available on every list, and on `Search` (`client.Search().All(ctx, req)`).
 
 See [examples/usage_examples.go](./examples/usage_examples.go) for complete working examples and [GoDoc](https://godoc.org/github.com/epheo/anytype-go) for the full API reference.
 

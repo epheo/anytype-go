@@ -179,7 +179,7 @@ func workWithObjectTypes(ctx context.Context, client anytype.Client, spaceID str
 
 	// Find a page type
 	var pageType *anytype.Type
-	for _, objType := range types {
+	for _, objType := range types.Data {
 		fmt.Printf("Found type: %s (Key: %s)\n", objType.Name, objType.Key)
 		if objType.Key == "page" {
 			pageType = &objType
@@ -213,13 +213,13 @@ func workWithTemplates(ctx context.Context, client anytype.Client, spaceID, type
 		return ""
 	}
 
-	if len(templates) == 0 {
+	if len(templates.Data) == 0 {
 		fmt.Println("No templates found for this type")
 		return ""
 	}
 
 	// Use the first template
-	template := templates[0]
+	template := templates.Data[0]
 	fmt.Printf("Found template: %s (ID: %s)\n", template.Name, template.ID)
 
 	// Get detailed template information
@@ -343,7 +343,19 @@ func workWithObjects(ctx context.Context, client anytype.Client, spaceID, templa
 		return ""
 	}
 
-	fmt.Printf("Found %d objects in space\n", len(objects))
+	fmt.Printf("Found %d objects in space (%d total)\n", len(objects.Data), objects.Pagination.Total)
+
+	// All() walks every page transparently; no manual offset loop needed.
+	fmt.Println("Counting all objects across every page...")
+	count := 0
+	for _, err := range client.Space(spaceID).Objects().All(ctx) {
+		if err != nil {
+			log.Printf("Failed while iterating objects: %v", err)
+			break
+		}
+		count++
+	}
+	fmt.Printf("Iterated %d objects in total\n", count)
 
 	// Create a new object
 	fmt.Println("Creating a new page object...")
@@ -532,7 +544,7 @@ func workWithProperties(ctx context.Context, client anytype.Client, spaceID stri
 		log.Printf("Failed to list properties: %v", err)
 		return
 	}
-	fmt.Printf("Found %d properties in space\n", len(properties))
+	fmt.Printf("Found %d properties in space\n", len(properties.Data))
 
 	// Create a multi-select property with tags
 	fmt.Println("Creating a multi-select property with tags...")
@@ -567,8 +579,8 @@ func workWithProperties(ctx context.Context, client anytype.Client, spaceID stri
 	if err != nil {
 		log.Printf("Failed to list tags: %v", err)
 	} else {
-		fmt.Printf("Found %d tags\n", len(tags))
-		for _, tag := range tags {
+		fmt.Printf("Found %d tags\n", len(tags.Data))
+		for _, tag := range tags.Data {
 			fmt.Printf("  - %s (Color: %s)\n", tag.Name, tag.Color)
 		}
 	}

@@ -2,10 +2,12 @@ package anytype
 
 import (
 	"context"
+	"iter"
 )
 
 type MemberClient interface {
-	List(ctx context.Context) (*MemberListResponse, error)
+	List(ctx context.Context, opts ...ListOption) (*Page[Member], error)
+	All(ctx context.Context, opts ...ListOption) iter.Seq2[Member, error]
 }
 
 type MemberContext interface {
@@ -21,11 +23,6 @@ type Member struct {
 	Role       MemberRole   `json:"role"`
 	Status     MemberStatus `json:"status"`
 	Icon       *Icon        `json:"icon,omitempty"`
-}
-
-type MemberListResponse struct {
-	Data       []Member   `json:"data"`
-	Pagination Pagination `json:"pagination"`
 }
 
 type MemberResponse struct {

@@ -2,6 +2,7 @@ package anytype
 
 import (
 	"context"
+	"iter"
 )
 
 type ListContext interface {
@@ -12,7 +13,8 @@ type ListContext interface {
 }
 
 type ViewClient interface {
-	List(ctx context.Context) (*ViewListResponse, error)
+	List(ctx context.Context, opts ...ListOption) (*Page[ListView], error)
+	All(ctx context.Context, opts ...ListOption) iter.Seq2[ListView, error]
 }
 
 type ViewContext interface {
@@ -28,7 +30,8 @@ type ObjectListContext interface {
 }
 
 type ObjectViewClient interface {
-	List(ctx context.Context) (*ObjectListResponse, error)
+	List(ctx context.Context, opts ...ListOption) (*Page[Object], error)
+	All(ctx context.Context, opts ...ListOption) iter.Seq2[Object, error]
 }
 
 type ListView struct {
@@ -52,14 +55,4 @@ type ListSort struct {
 	PropertyKey string `json:"property_key"`
 	Format      string `json:"format"`
 	SortType    string `json:"sort_type"`
-}
-
-type ViewListResponse struct {
-	Data       []ListView `json:"data"`
-	Pagination Pagination `json:"pagination"`
-}
-
-type ObjectListResponse struct {
-	Data       []Object   `json:"data"`
-	Pagination Pagination `json:"pagination"`
 }

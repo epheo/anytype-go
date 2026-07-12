@@ -8,6 +8,13 @@ type Pagination struct {
 	HasMore bool `json:"has_more"`
 }
 
+// Page is the shape every list and search endpoint returns: one slice of
+// results plus the pagination cursor. All() walks every page for you.
+type Page[T any] struct {
+	Data       []T        `json:"data"`
+	Pagination Pagination `json:"pagination"`
+}
+
 type ListOptions struct {
 	Limit  int
 	Offset int

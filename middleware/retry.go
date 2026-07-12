@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"bytes"
-	"io"
 	"net/http"
 	"time"
 )
@@ -67,28 +65,9 @@ func (m *RetryMiddleware) Do(req *http.Request) (*http.Response, error) {
 		return resp, err
 	}
 
-	// Prepare body for retries if needed
-	var getBody func() (io.ReadCloser, error)
-	if req.Body != nil {
-		// Use GetBody if available (avoids reading entire body into memory for large requests)
-		if req.GetBody != nil {
-			getBody = req.GetBody
-		} else {
-			// Fall back to manual body cloning when GetBody is unavailable
-			// (e.g., custom io.Reader implementations)
-			bodyBytes, readErr := io.ReadAll(req.Body)
-			if readErr != nil {
-				return nil, readErr
-			}
-			req.Body.Close()
-			// Set up getBody function for retries
-			getBody = func() (io.ReadCloser, error) {
-				return io.NopCloser(bytes.NewReader(bodyBytes)), nil
-			}
-			// Reset body for first retry
-			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-		}
-	}
+	// Bodies come from http.NewRequestWithContext over a bytes.Reader, so GetBody
+	// is always set and each retry gets a fresh, rewound body.
+	getBody := req.GetBody
 
 	// Retry loop
 	retries := 0

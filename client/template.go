@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"iter"
 	"net/http"
 
 	"github.com/epheo/anytype-go"
@@ -14,24 +15,24 @@ type TemplateClientImpl struct {
 	typeID  string
 }
 
-func (tc *TemplateClientImpl) List(ctx context.Context) ([]anytype.Object, error) {
-	endpoint := fmt.Sprintf("/spaces/%s/types/%s/templates", tc.spaceID, tc.typeID)
+func (tc *TemplateClientImpl) List(ctx context.Context, opts ...anytype.ListOption) (*anytype.Page[anytype.Object], error) {
+	endpoint := withListParams(fmt.Sprintf("/spaces/%s/types/%s/templates", tc.spaceID, tc.typeID), opts)
 
 	req, err := tc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var response struct {
-		Data       []anytype.Object   `json:"data"`
-		Pagination anytype.Pagination `json:"pagination"`
-	}
-
+	var response anytype.Page[anytype.Object]
 	if err := tc.client.doRequest(req, &response); err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return &response, nil
+}
+
+func (tc *TemplateClientImpl) All(ctx context.Context, opts ...anytype.ListOption) iter.Seq2[anytype.Object, error] {
+	return paginate(ctx, tc.List, opts...)
 }
 
 type TemplateContextImpl struct {

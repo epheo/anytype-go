@@ -7,12 +7,59 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"iter"
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 
 	anytype "github.com/epheo/anytype-go"
 )
+
+// withListParams appends limit/offset query params to an endpoint. Zero values
+// are omitted so the server applies its own defaults.
+func withListParams(endpoint string, opts []anytype.ListOption) string {
+	o := anytype.ApplyListOptions(opts...)
+	params := url.Values{}
+	if o.Limit > 0 {
+		params.Set("limit", strconv.Itoa(o.Limit))
+	}
+	if o.Offset > 0 {
+		params.Set("offset", strconv.Itoa(o.Offset))
+	}
+	if encoded := params.Encode(); encoded != "" {
+		return endpoint + "?" + encoded
+	}
+	return endpoint
+}
+
+// paginate turns any List-shaped fetch into an iterator that walks every page,
+// advancing the offset until the server reports no more results. A fetch error
+// is yielded once with the zero value, then iteration stops.
+func paginate[T any](ctx context.Context, fetch func(context.Context, ...anytype.ListOption) (*anytype.Page[T], error), base ...anytype.ListOption) iter.Seq2[T, error] {
+	return func(yield func(T, error) bool) {
+		var zero T
+		offset := 0
+		for {
+			opts := append(append([]anytype.ListOption(nil), base...), anytype.WithOffset(offset))
+			page, err := fetch(ctx, opts...)
+			if err != nil {
+				yield(zero, err)
+				return
+			}
+			for _, item := range page.Data {
+				if !yield(item, nil) {
+					return
+				}
+			}
+			// len==0 guards against a server that reports HasMore with no rows.
+			if !page.Pagination.HasMore || len(page.Data) == 0 {
+				return
+			}
+			offset += len(page.Data)
+		}
+	}
+}
 
 func (c *ClientImpl) newRequest(ctx context.Context, method, urlPath string, body interface{}) (*http.Request, error) {
 	u, err := url.Parse(c.baseURL)

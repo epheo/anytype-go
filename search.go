@@ -4,15 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"iter"
 )
 
 type SearchClient interface {
-	Search(ctx context.Context, request SearchRequest) (*SearchResponse, error)
-}
-
-type SearchResponse struct {
-	Data       []Object   `json:"data"`
-	Pagination Pagination `json:"pagination"`
+	Search(ctx context.Context, request SearchRequest, opts ...ListOption) (*Page[Object], error)
+	All(ctx context.Context, request SearchRequest, opts ...ListOption) iter.Seq2[Object, error]
 }
 
 type SearchRequest struct {

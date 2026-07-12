@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"iter"
 	"net/http"
 	"net/url"
 
@@ -14,37 +15,24 @@ type ObjectClientImpl struct {
 	spaceID string
 }
 
-func (oc *ObjectClientImpl) List(ctx context.Context, opts ...anytype.ListOption) ([]anytype.Object, error) {
-	endpoint := fmt.Sprintf("/spaces/%s/objects", oc.spaceID)
-
-	listOpts := anytype.ApplyListOptions(opts...)
-	params := url.Values{}
-	if listOpts.Limit > 0 {
-		params.Set("limit", fmt.Sprintf("%d", listOpts.Limit))
-	}
-	if listOpts.Offset > 0 {
-		params.Set("offset", fmt.Sprintf("%d", listOpts.Offset))
-	}
-	if encoded := params.Encode(); encoded != "" {
-		endpoint += "?" + encoded
-	}
+func (oc *ObjectClientImpl) List(ctx context.Context, opts ...anytype.ListOption) (*anytype.Page[anytype.Object], error) {
+	endpoint := withListParams(fmt.Sprintf("/spaces/%s/objects", oc.spaceID), opts)
 
 	req, err := oc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var response struct {
-		Data       []anytype.Object   `json:"data"`
-		Pagination anytype.Pagination `json:"pagination"`
-	}
-
-	err = oc.client.doRequest(req, &response)
-	if err != nil {
+	var response anytype.Page[anytype.Object]
+	if err := oc.client.doRequest(req, &response); err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return &response, nil
+}
+
+func (oc *ObjectClientImpl) All(ctx context.Context, opts ...anytype.ListOption) iter.Seq2[anytype.Object, error] {
+	return paginate(ctx, oc.List, opts...)
 }
 
 func (oc *ObjectClientImpl) Create(ctx context.Context, request anytype.CreateObjectRequest) (*anytype.ObjectResponse, error) {
