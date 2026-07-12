@@ -2,7 +2,7 @@ package anytype
 
 const (
 	// Follows AnyType Versioning
-	Version    = "0.53.1"
+	Version    = "0.55.5"
 	APIVersion = "2025-11-08"
 )
 
