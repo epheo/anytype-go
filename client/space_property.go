@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"iter"
 	"net/http"
 
 	"github.com/epheo/anytype-go"
@@ -13,22 +14,24 @@ type SpacePropertyClientImpl struct {
 	spaceID string
 }
 
-func (pc *SpacePropertyClientImpl) List(ctx context.Context) ([]anytype.Property, error) {
-	endpoint := fmt.Sprintf("/spaces/%s/properties", pc.spaceID)
+func (pc *SpacePropertyClientImpl) List(ctx context.Context, opts ...anytype.ListOption) (*anytype.Page[anytype.Property], error) {
+	endpoint := withListParams(fmt.Sprintf("/spaces/%s/properties", pc.spaceID), opts)
 
 	req, err := pc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var response struct {
-		Data []anytype.Property `json:"data"`
-	}
+	var response anytype.Page[anytype.Property]
 	if err := pc.client.doRequest(req, &response); err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return &response, nil
+}
+
+func (pc *SpacePropertyClientImpl) All(ctx context.Context, opts ...anytype.ListOption) iter.Seq2[anytype.Property, error] {
+	return paginate(ctx, pc.List, opts...)
 }
 
 func (pc *SpacePropertyClientImpl) Create(ctx context.Context, request anytype.CreatePropertyRequest) (*anytype.PropertyResponse, error) {

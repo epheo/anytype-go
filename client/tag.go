@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"iter"
 	"net/http"
 
 	"github.com/epheo/anytype-go"
@@ -14,22 +15,24 @@ type TagClientImpl struct {
 	propertyID string
 }
 
-func (tc *TagClientImpl) List(ctx context.Context) ([]anytype.Tag, error) {
-	endpoint := fmt.Sprintf("/spaces/%s/properties/%s/tags", tc.spaceID, tc.propertyID)
+func (tc *TagClientImpl) List(ctx context.Context, opts ...anytype.ListOption) (*anytype.Page[anytype.Tag], error) {
+	endpoint := withListParams(fmt.Sprintf("/spaces/%s/properties/%s/tags", tc.spaceID, tc.propertyID), opts)
 
 	req, err := tc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var response struct {
-		Data []anytype.Tag `json:"data"`
-	}
+	var response anytype.Page[anytype.Tag]
 	if err := tc.client.doRequest(req, &response); err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return &response, nil
+}
+
+func (tc *TagClientImpl) All(ctx context.Context, opts ...anytype.ListOption) iter.Seq2[anytype.Tag, error] {
+	return paginate(ctx, tc.List, opts...)
 }
 
 func (tc *TagClientImpl) Create(ctx context.Context, request anytype.CreateTagRequest) (*anytype.TagResponse, error) {

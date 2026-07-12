@@ -2,15 +2,18 @@ package anytype
 
 import (
 	"context"
+	"iter"
 )
 
 type SpacePropertyClient interface {
-	List(ctx context.Context) ([]Property, error)
+	List(ctx context.Context, opts ...ListOption) (*Page[Property], error)
+	All(ctx context.Context, opts ...ListOption) iter.Seq2[Property, error]
 	Create(ctx context.Context, request CreatePropertyRequest) (*PropertyResponse, error)
 }
 
 type TagClient interface {
-	List(ctx context.Context) ([]Tag, error)
+	List(ctx context.Context, opts ...ListOption) (*Page[Tag], error)
+	All(ctx context.Context, opts ...ListOption) iter.Seq2[Tag, error]
 	Create(ctx context.Context, request CreateTagRequest) (*TagResponse, error)
 }
 

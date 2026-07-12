@@ -2,10 +2,12 @@ package anytype
 
 import (
 	"context"
+	"iter"
 )
 
 type SpaceClient interface {
-	List(ctx context.Context) (*SpaceListResponse, error)
+	List(ctx context.Context, opts ...ListOption) (*Page[Space], error)
+	All(ctx context.Context, opts ...ListOption) iter.Seq2[Space, error]
 	Create(ctx context.Context, request CreateSpaceRequest) (*SpaceResponse, error)
 }
 
@@ -16,7 +18,7 @@ type SpaceContext interface {
 	Object(objectID string) ObjectContext
 	Types() TypeClient
 	Type(typeID string) TypeContext
-	Search(ctx context.Context, request SearchRequest) (*SearchResponse, error)
+	Search(ctx context.Context, request SearchRequest, opts ...ListOption) (*Page[Object], error)
 	List(listID string) ListContext
 	Members() MemberClient
 	Member(memberID string) MemberContext
@@ -46,11 +48,6 @@ type Space struct {
 	NetworkID   string `json:"network_id,omitempty"`
 	GatewayURL  string `json:"gateway_url,omitempty"`
 	Object      string `json:"object"`
-}
-
-type SpaceListResponse struct {
-	Data       []Space    `json:"data"`
-	Pagination Pagination `json:"pagination"`
 }
 
 type SpaceResponse struct {

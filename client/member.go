@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"iter"
 	"net/http"
 
 	"github.com/epheo/anytype-go"
@@ -12,18 +13,24 @@ type MemberClientImpl struct {
 	spaceID string
 }
 
-func (mc *MemberClientImpl) List(ctx context.Context) (*anytype.MemberListResponse, error) {
-	req, err := mc.client.newRequest(ctx, http.MethodGet, "/spaces/"+mc.spaceID+"/members", nil)
+func (mc *MemberClientImpl) List(ctx context.Context, opts ...anytype.ListOption) (*anytype.Page[anytype.Member], error) {
+	endpoint := withListParams("/spaces/"+mc.spaceID+"/members", opts)
+
+	req, err := mc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var response anytype.MemberListResponse
+	var response anytype.Page[anytype.Member]
 	if err := mc.client.doRequest(req, &response); err != nil {
 		return nil, err
 	}
 
 	return &response, nil
+}
+
+func (mc *MemberClientImpl) All(ctx context.Context, opts ...anytype.ListOption) iter.Seq2[anytype.Member, error] {
+	return paginate(ctx, mc.List, opts...)
 }
 
 type MemberContextImpl struct {

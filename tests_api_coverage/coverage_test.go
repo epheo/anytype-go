@@ -3,16 +3,26 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
 
 type ApiDefinition struct {
-	Paths map[string]map[string]interface{} `json:"paths"`
-	Info  map[string]interface{}            `json:"info"`
+	Paths      map[string]map[string]interface{} `json:"paths"`
+	Components struct {
+		Schemas map[string]struct {
+			Enum []interface{} `json:"enum"`
+		} `json:"schemas"`
+	} `json:"components"`
+	Info map[string]interface{} `json:"info"`
 }
 
 type EndpointInfo struct {
@@ -29,28 +39,59 @@ type methodPath struct {
 	Path   string
 }
 
-var (
-	// Matches urlPath/endpoint/path := "/literal/path"
-	reLiteralPath = regexp.MustCompile(`(?:endpoint|urlPath|path)\s*:?=\s*"(/[^"]+)"`)
-	// Matches string concatenation assignments: endpoint := "/spaces/" + var + "/members"
-	reConcatAssign = regexp.MustCompile(`(?:endpoint|urlPath|path)\s*:?=\s*(".+)$`)
-	// Matches fmt.Sprintf assigned to a path variable: endpoint := fmt.Sprintf("/path/%s", ...)
-	reSprintfAssign = regexp.MustCompile(`(?:endpoint|urlPath|path)\s*:?=\s*fmt\.Sprintf\("(/[^"]+)"`)
-	// Extracts HTTP method and optional inline path from newRequest calls
-	reNewRequest = regexp.MustCompile(`newRequest\([^,]+,\s*(?:http\.Method(\w+)|"(\w+)")(?:.*?,\s*(?:fmt\.Sprintf\("(/[^"]+)"|"(/[^"]+)"))?`)
-	// For normalizing path parameters
-	reParamPlaceholder = regexp.MustCompile(`\{[^}]*\}|%[a-zA-Z]`)
-)
+// Endpoints the SDK consciously does not implement, keyed by operationId.
+// Anything unimplemented and absent here fails the test.
+var allowedUnimplemented = map[string]bool{}
+
+// SDK typed string enums checked against the spec's top-level schema enums.
+// Names differ on purpose (FilterFormat vs PropertyFormat), so the link is explicit.
+var enumMappings = []struct{ SDKType, SpecSchema string }{
+	{"FilterCondition", "FilterCondition"},
+	{"FilterOperator", "FilterOperator"},
+	{"FilterFormat", "PropertyFormat"},
+	{"SortDirection", "SortDirection"},
+	{"SortProperty", "SortProperty"},
+}
 
 func TestApiCoverage(t *testing.T) {
 	apiDef, err := loadApiDefinition()
 	if err != nil {
-		t.Fatalf("Failed to load API definition: %v", err)
+		t.Fatalf("load API definition: %v", err)
 	}
 
+	currentDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	root := filepath.Dir(currentDir)
+
 	endpoints := extractEndpoints(apiDef)
-	checkSDKImplementation(endpoints)
+	clientPaths, err := extractClientPaths(filepath.Join(root, "client"))
+	if err != nil {
+		t.Fatalf("extract client paths: %v", err)
+	}
+
+	markImplemented(endpoints, clientPaths)
 	displayCoverageStats(t, endpoints)
+
+	// Gate 1: every unimplemented endpoint must be explicitly allowlisted.
+	for _, e := range endpoints {
+		if !e.Implemented && !allowedUnimplemented[e.OperationID] {
+			t.Errorf("unimplemented endpoint not in allowlist: %s %s [%s]", e.Method, e.Path, e.OperationID)
+		}
+	}
+
+	// Gate 2: every client route must map to a real endpoint; an orphan means a
+	// typo or a path the extractor mis-read (the class of bug this test once hid).
+	known := endpointSet(endpoints)
+	for _, cp := range clientPaths {
+		if !known[cp] {
+			t.Errorf("orphan client route matches no API endpoint: %s %s", cp.Method, cp.Path)
+		}
+	}
+
+	// Gate 3: SDK typed enums must cover their spec counterparts.
+	checkEnumDrift(t, apiDef, root)
 }
 
 func loadApiDefinition() (*ApiDefinition, error) {
@@ -87,17 +128,11 @@ func extractEndpoints(apiDef *ApiDefinition) []EndpointInfo {
 			}
 
 			var tag, summary, operationId string
-			if tags, exists := methodMap["tags"]; exists {
-				if tagArr, ok := tags.([]interface{}); ok && len(tagArr) > 0 {
-					tag, _ = tagArr[0].(string)
-				}
+			if tags, ok := methodMap["tags"].([]interface{}); ok && len(tags) > 0 {
+				tag, _ = tags[0].(string)
 			}
-			if sum, exists := methodMap["summary"].(string); exists {
-				summary = sum
-			}
-			if opid, exists := methodMap["operationId"].(string); exists {
-				operationId = opid
-			}
+			summary, _ = methodMap["summary"].(string)
+			operationId, _ = methodMap["operationId"].(string)
 
 			endpoints = append(endpoints, EndpointInfo{
 				Path:        path,
@@ -105,7 +140,6 @@ func extractEndpoints(apiDef *ApiDefinition) []EndpointInfo {
 				Tag:         tag,
 				Summary:     summary,
 				OperationID: operationId,
-				Implemented: false,
 			})
 		}
 	}
@@ -113,170 +147,312 @@ func extractEndpoints(apiDef *ApiDefinition) []EndpointInfo {
 	return endpoints
 }
 
-func checkSDKImplementation(endpoints []EndpointInfo) {
-	currentDir, err := os.Getwd()
-	if err != nil {
-		fmt.Printf("Warning: couldn't get current directory: %v\n", err)
-		return
-	}
-
-	clientDir := filepath.Join(filepath.Dir(currentDir), "client")
-	clientPaths, err := extractClientPaths(clientDir)
-	if err != nil {
-		fmt.Printf("Warning: couldn't extract client paths: %v\n", err)
-		return
-	}
-
-	for i := range endpoints {
-		apiNorm := normalizeAPIPath(endpoints[i].Path)
-		for _, cp := range clientPaths {
-			if apiNorm == cp.Path && endpoints[i].Method == cp.Method {
-				endpoints[i].Implemented = true
-				break
-			}
-		}
-	}
-}
-
-func normalizeAPIPath(p string) string {
-	p = strings.TrimPrefix(p, "/v1")
-	p = reParamPlaceholder.ReplaceAllString(p, "{}")
-	return strings.TrimSuffix(p, "/")
-}
-
+// extractClientPaths parses the client package and folds each newRequest call's
+// method and path argument into a normalized (method, path) pair. Parsing the AST
+// rather than scraping text handles inline concatenation, fmt.Sprintf, and path
+// variables uniformly, which regex matching did not.
 func extractClientPaths(dir string) ([]methodPath, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 
+	fset := token.NewFileSet()
 	seen := make(map[methodPath]bool)
 	var paths []methodPath
 
 	for _, f := range files {
-		if f.IsDir() || !strings.HasSuffix(f.Name(), ".go") {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".go") || strings.HasSuffix(f.Name(), "_test.go") {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(dir, f.Name()))
+
+		node, err := parser.ParseFile(fset, filepath.Join(dir, f.Name()), nil, 0)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("parse %s: %w", f.Name(), err)
 		}
 
-		lines := strings.Split(string(data), "\n")
-		for i, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			m := reNewRequest.FindStringSubmatch(trimmed)
-			if m == nil {
+		for _, decl := range node.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
 				continue
 			}
+			assigns := collectStringAssigns(fn.Body)
 
-			// Group 1: http.Method name, Group 2: string literal method
-			method := strings.ToUpper(m[1] + m[2])
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || sel.Sel.Name != "newRequest" || len(call.Args) < 3 {
+					return true
+				}
 
-			// Extract path: prefer inline fmt.Sprintf (group 3), then inline literal (group 4)
-			var raw string
-			switch {
-			case m[3] != "":
-				raw = m[3]
-			case m[4] != "":
-				raw = m[4]
-			default:
-				// Path is in a variable — scan preceding lines for assignment
-				raw = findPrecedingPath(lines, i)
-			}
+				method := methodFromExpr(call.Args[1])
+				raw := evalPathExpr(call.Args[2], assigns)
+				if method == "" || !strings.HasPrefix(raw, "/") {
+					return true
+				}
 
-			if raw == "" {
-				continue
-			}
-
-			mp := methodPath{Method: method, Path: normalizePath(raw)}
-			if !seen[mp] {
-				seen[mp] = true
-				paths = append(paths, mp)
-			}
+				mp := methodPath{Method: method, Path: normalizePath(raw)}
+				if !seen[mp] {
+					seen[mp] = true
+					paths = append(paths, mp)
+				}
+				return true
+			})
 		}
 	}
+
 	return paths, nil
 }
 
-// findPrecedingPath scans lines before index i for a path variable assignment.
-func findPrecedingPath(lines []string, i int) string {
-	for j := i - 1; j >= 0 && j >= i-20; j-- {
-		trimmed := strings.TrimSpace(lines[j])
-		if m := reSprintfAssign.FindStringSubmatch(trimmed); m != nil {
-			return m[1]
+// collectStringAssigns maps each locally assigned variable to its value expression
+// so evalPathExpr can resolve a path passed to newRequest by name. Compound
+// assignments (endpoint += "?"+query) are skipped: the query is dropped anyway.
+func collectStringAssigns(body *ast.BlockStmt) map[string]ast.Expr {
+	assigns := make(map[string]ast.Expr)
+	ast.Inspect(body, func(n ast.Node) bool {
+		as, ok := n.(*ast.AssignStmt)
+		if !ok || (as.Tok != token.DEFINE && as.Tok != token.ASSIGN) {
+			return true
 		}
-		if reLiteralPath.MatchString(trimmed) && !strings.Contains(trimmed, "+") {
-			return reLiteralPath.FindStringSubmatch(trimmed)[1]
+		if len(as.Lhs) != 1 || len(as.Rhs) != 1 {
+			return true
 		}
-		if reConcatAssign.MatchString(trimmed) && strings.Contains(trimmed, "+") {
-			return extractConcatPath(trimmed)
+		if id, ok := as.Lhs[0].(*ast.Ident); ok {
+			assigns[id.Name] = as.Rhs[0]
 		}
+		return true
+	})
+	return assigns
+}
+
+// evalPathExpr folds a path expression into a template, rendering every dynamic
+// segment as "{}" so it aligns with a spec path parameter after normalization.
+func evalPathExpr(expr ast.Expr, assigns map[string]ast.Expr) string {
+	switch e := expr.(type) {
+	case *ast.BasicLit:
+		return litString(e)
+	case *ast.BinaryExpr:
+		if e.Op == token.ADD {
+			return evalPathExpr(e.X, assigns) + evalPathExpr(e.Y, assigns)
+		}
+	case *ast.Ident:
+		if v, ok := assigns[e.Name]; ok {
+			return evalPathExpr(v, assigns)
+		}
+	case *ast.CallExpr:
+		if isSprintf(e) && len(e.Args) > 0 {
+			if lit, ok := e.Args[0].(*ast.BasicLit); ok {
+				return litString(lit)
+			}
+		}
+		// withListParams(path, opts) wraps the real path in its first argument.
+		if fn, ok := e.Fun.(*ast.Ident); ok && fn.Name == "withListParams" && len(e.Args) > 0 {
+			return evalPathExpr(e.Args[0], assigns)
+		}
+	}
+	return "{}"
+}
+
+func methodFromExpr(expr ast.Expr) string {
+	switch e := expr.(type) {
+	case *ast.SelectorExpr: // http.MethodGet
+		if x, ok := e.X.(*ast.Ident); ok && x.Name == "http" {
+			return strings.ToUpper(strings.TrimPrefix(e.Sel.Name, "Method"))
+		}
+	case *ast.BasicLit:
+		return strings.ToUpper(litString(e))
 	}
 	return ""
 }
 
-func extractConcatPath(line string) string {
-	idx := strings.Index(line, ":=")
-	if idx < 0 {
-		idx = strings.Index(line, "=")
+func isSprintf(call *ast.CallExpr) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
 	}
-	if idx < 0 {
+	pkg, ok := sel.X.(*ast.Ident)
+	return ok && pkg.Name == "fmt" && sel.Sel.Name == "Sprintf"
+}
+
+func litString(lit *ast.BasicLit) string {
+	if lit.Kind != token.STRING {
 		return ""
 	}
-	rhs := line[idx+2:]
-
-	reQuoted := regexp.MustCompile(`"([^"]*)"`)
-	parts := strings.Split(rhs, "+")
-	var result strings.Builder
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if m := reQuoted.FindStringSubmatch(part); m != nil {
-			result.WriteString(m[1])
-		} else {
-			result.WriteString("{}")
-		}
+	if s, err := strconv.Unquote(lit.Value); err == nil {
+		return s
 	}
-	path := result.String()
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return ""
+	return strings.Trim(lit.Value, "`\"")
 }
 
-func normalizePath(path string) string {
-	path = reParamPlaceholder.ReplaceAllString(path, "{}")
-	if idx := strings.Index(path, "?"); idx > -1 {
-		path = path[:idx]
+// reParamPlaceholder collapses spec params ({id}) and format verbs (%s) to "{}".
+var reParamPlaceholder = regexp.MustCompile(`\{[^}]*\}|%[a-zA-Z]`)
+
+// normalizePath renders spec and client paths into one comparable form: no /v1
+// prefix, no query string, dynamic segments as "{}", no trailing slash.
+func normalizePath(p string) string {
+	if i := strings.Index(p, "?"); i >= 0 {
+		p = p[:i]
 	}
-	return path
+	p = strings.TrimPrefix(p, "/v1")
+	p = reParamPlaceholder.ReplaceAllString(p, "{}")
+	return strings.TrimSuffix(p, "/")
+}
+
+func markImplemented(endpoints []EndpointInfo, clientPaths []methodPath) {
+	have := make(map[methodPath]bool, len(clientPaths))
+	for _, cp := range clientPaths {
+		have[cp] = true
+	}
+	for i := range endpoints {
+		mp := methodPath{Method: endpoints[i].Method, Path: normalizePath(endpoints[i].Path)}
+		endpoints[i].Implemented = have[mp]
+	}
+}
+
+func endpointSet(endpoints []EndpointInfo) map[methodPath]bool {
+	set := make(map[methodPath]bool, len(endpoints))
+	for _, e := range endpoints {
+		set[methodPath{Method: e.Method, Path: normalizePath(e.Path)}] = true
+	}
+	return set
+}
+
+func checkEnumDrift(t *testing.T, apiDef *ApiDefinition, root string) {
+	spec := specEnums(apiDef)
+	sdk, err := sdkEnums(root)
+	if err != nil {
+		t.Errorf("extract SDK enums: %v", err)
+		return
+	}
+
+	t.Logf("=== Enum Drift (%d mappings) ===", len(enumMappings))
+	for _, m := range enumMappings {
+		specVals, ok := spec[m.SpecSchema]
+		if !ok {
+			t.Errorf("enum mapping %q: spec schema %q not found", m.SDKType, m.SpecSchema)
+			continue
+		}
+		sdkVals, ok := sdk[m.SDKType]
+		if !ok {
+			t.Errorf("enum mapping %q: SDK type not found in package", m.SDKType)
+			continue
+		}
+
+		sdkSet := toSet(sdkVals)
+		var missing []string
+		for _, v := range specVals {
+			if !sdkSet[v] {
+				missing = append(missing, v)
+			}
+		}
+		if len(missing) > 0 {
+			sort.Strings(missing)
+			t.Errorf("SDK %s is missing spec %s values: %v", m.SDKType, m.SpecSchema, missing)
+			continue
+		}
+		t.Logf("%s: OK (%d values)", m.SDKType, len(specVals))
+	}
+	t.Logf("")
+}
+
+func specEnums(apiDef *ApiDefinition) map[string][]string {
+	out := make(map[string][]string)
+	for name, sch := range apiDef.Components.Schemas {
+		if len(sch.Enum) == 0 {
+			continue
+		}
+		vals := make([]string, 0, len(sch.Enum))
+		for _, v := range sch.Enum {
+			if s, ok := v.(string); ok {
+				vals = append(vals, s)
+			}
+		}
+		out[name] = vals
+	}
+	return out
+}
+
+// sdkEnums collects the values of every typed string constant in the root package,
+// keyed by type name, so they can be checked against the spec without hand-copying.
+func sdkEnums(dir string) (map[string][]string, error) {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	fset := token.NewFileSet()
+	out := make(map[string][]string)
+
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".go") || strings.HasSuffix(f.Name(), "_test.go") {
+			continue
+		}
+		node, err := parser.ParseFile(fset, filepath.Join(dir, f.Name()), nil, 0)
+		if err != nil {
+			continue
+		}
+		for _, decl := range node.Decls {
+			gd, ok := decl.(*ast.GenDecl)
+			if !ok || gd.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok || len(vs.Values) == 0 {
+					continue
+				}
+				typeName, ok := vs.Type.(*ast.Ident)
+				if !ok {
+					continue
+				}
+				for _, val := range vs.Values {
+					if lit, ok := val.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+						out[typeName.Name] = append(out[typeName.Name], litString(lit))
+					}
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
+func toSet(vals []string) map[string]bool {
+	set := make(map[string]bool, len(vals))
+	for _, v := range vals {
+		set[v] = true
+	}
+	return set
 }
 
 func displayCoverageStats(t *testing.T, endpoints []EndpointInfo) {
 	total := len(endpoints)
 	implemented := 0
 
-	tagStats := make(map[string]struct{ Total, Implemented int })
-	methodStats := make(map[string]struct{ Total, Implemented int })
+	type counter struct{ Total, Implemented int }
+	tagStats := make(map[string]*counter)
+	methodStats := make(map[string]*counter)
+
+	bump := func(m map[string]*counter, key string, done bool) {
+		c := m[key]
+		if c == nil {
+			c = &counter{}
+			m[key] = c
+		}
+		c.Total++
+		if done {
+			c.Implemented++
+		}
+	}
 
 	for _, e := range endpoints {
 		if e.Implemented {
 			implemented++
 		}
-
-		ts := tagStats[e.Tag]
-		ts.Total++
-		if e.Implemented {
-			ts.Implemented++
-		}
-		tagStats[e.Tag] = ts
-
-		ms := methodStats[e.Method]
-		ms.Total++
-		if e.Implemented {
-			ms.Implemented++
-		}
-		methodStats[e.Method] = ms
+		bump(tagStats, e.Tag, e.Implemented)
+		bump(methodStats, e.Method, e.Implemented)
 	}
 
 	var coverage float64
@@ -291,46 +467,67 @@ func displayCoverageStats(t *testing.T, endpoints []EndpointInfo) {
 	t.Logf("Coverage: %.1f%%\n", coverage)
 
 	t.Logf("=== Coverage by Tag ===")
-	for tag, stats := range tagStats {
-		tagName := tag
-		if tagName == "" {
-			tagName = "(no tag)"
+	for _, tag := range sortedKeys(tagStats) {
+		s := tagStats[tag]
+		name := tag
+		if name == "" {
+			name = "(no tag)"
 		}
-		t.Logf("%s: %.1f%% (%d/%d)", tagName, float64(stats.Implemented)*100/float64(stats.Total), stats.Implemented, stats.Total)
+		t.Logf("%s: %.1f%% (%d/%d)", name, pct(s.Implemented, s.Total), s.Implemented, s.Total)
 	}
 	t.Logf("")
 
 	t.Logf("=== Coverage by HTTP Method ===")
-	for method, stats := range methodStats {
-		t.Logf("%s: %.1f%% (%d/%d)", method, float64(stats.Implemented)*100/float64(stats.Total), stats.Implemented, stats.Total)
+	for _, method := range sortedKeys(methodStats) {
+		s := methodStats[method]
+		t.Logf("%s: %.1f%% (%d/%d)", method, pct(s.Implemented, s.Total), s.Implemented, s.Total)
 	}
 	t.Logf("")
 
-	if total-implemented > 0 {
-		t.Logf("=== Unimplemented Endpoints ===")
-		unimplementedByTag := make(map[string][]EndpointInfo)
-		for _, e := range endpoints {
-			if !e.Implemented {
-				tag := e.Tag
-				if tag == "" {
-					tag = "(no tag)"
-				}
-				unimplementedByTag[tag] = append(unimplementedByTag[tag], e)
-			}
-		}
-		for tag, endpointList := range unimplementedByTag {
-			t.Logf("\n%s:", tag)
-			for _, e := range endpointList {
-				opInfo := ""
-				if e.OperationID != "" {
-					opInfo = fmt.Sprintf(" [%s]", e.OperationID)
-				}
-				t.Logf("  %s %s%s", e.Method, e.Path, opInfo)
-				if e.Summary != "" {
-					t.Logf("    → %s", e.Summary)
-				}
-			}
-		}
-		t.Logf("")
+	if total-implemented == 0 {
+		return
 	}
+
+	t.Logf("=== Unimplemented Endpoints ===")
+	byTag := make(map[string][]EndpointInfo)
+	for _, e := range endpoints {
+		if e.Implemented {
+			continue
+		}
+		tag := e.Tag
+		if tag == "" {
+			tag = "(no tag)"
+		}
+		byTag[tag] = append(byTag[tag], e)
+	}
+	for _, tag := range sortedKeys(byTag) {
+		t.Logf("\n%s:", tag)
+		for _, e := range byTag[tag] {
+			opInfo := ""
+			if e.OperationID != "" {
+				opInfo = fmt.Sprintf(" [%s]", e.OperationID)
+			}
+			t.Logf("  %s %s%s", e.Method, e.Path, opInfo)
+			if e.Summary != "" {
+				t.Logf("    %s", e.Summary)
+			}
+		}
+	}
+	t.Logf("")
+}
+
+func pct(done, total int) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(done) * 100 / float64(total)
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

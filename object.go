@@ -2,10 +2,12 @@ package anytype
 
 import (
 	"context"
+	"iter"
 )
 
 type ObjectClient interface {
-	List(ctx context.Context, opts ...ListOption) ([]Object, error)
+	List(ctx context.Context, opts ...ListOption) (*Page[Object], error)
+	All(ctx context.Context, opts ...ListOption) iter.Seq2[Object, error]
 	Create(ctx context.Context, request CreateObjectRequest) (*ObjectResponse, error)
 }
 

@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"iter"
 	"net/http"
 
 	"github.com/epheo/anytype-go"
@@ -57,20 +58,23 @@ type ViewClientImpl struct {
 	listID  string
 }
 
-func (vc *ViewClientImpl) List(ctx context.Context) (*anytype.ViewListResponse, error) {
-	endpoint := "/spaces/" + vc.spaceID + "/lists/" + vc.listID + "/views"
+func (vc *ViewClientImpl) List(ctx context.Context, opts ...anytype.ListOption) (*anytype.Page[anytype.ListView], error) {
+	endpoint := withListParams("/spaces/"+vc.spaceID+"/lists/"+vc.listID+"/views", opts)
 	req, err := vc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	response := &anytype.ViewListResponse{}
-	err = vc.client.doRequest(req, response)
-	if err != nil {
+	response := &anytype.Page[anytype.ListView]{}
+	if err := vc.client.doRequest(req, response); err != nil {
 		return nil, err
 	}
 
 	return response, nil
+}
+
+func (vc *ViewClientImpl) All(ctx context.Context, opts ...anytype.ListOption) iter.Seq2[anytype.ListView, error] {
+	return paginate(ctx, vc.List, opts...)
 }
 
 type ViewContextImpl struct {
@@ -134,18 +138,21 @@ type ObjectViewClientImpl struct {
 	viewID  string
 }
 
-func (ovc *ObjectViewClientImpl) List(ctx context.Context) (*anytype.ObjectListResponse, error) {
-	endpoint := "/spaces/" + ovc.spaceID + "/lists/" + ovc.listID + "/views/" + ovc.viewID + "/objects"
+func (ovc *ObjectViewClientImpl) List(ctx context.Context, opts ...anytype.ListOption) (*anytype.Page[anytype.Object], error) {
+	endpoint := withListParams("/spaces/"+ovc.spaceID+"/lists/"+ovc.listID+"/views/"+ovc.viewID+"/objects", opts)
 	req, err := ovc.client.newRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	response := &anytype.ObjectListResponse{}
-	err = ovc.client.doRequest(req, response)
-	if err != nil {
+	response := &anytype.Page[anytype.Object]{}
+	if err := ovc.client.doRequest(req, response); err != nil {
 		return nil, err
 	}
 
 	return response, nil
+}
+
+func (ovc *ObjectViewClientImpl) All(ctx context.Context, opts ...anytype.ListOption) iter.Seq2[anytype.Object, error] {
+	return paginate(ctx, ovc.List, opts...)
 }

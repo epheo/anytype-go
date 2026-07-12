@@ -3,12 +3,14 @@ package anytype
 import (
 	"context"
 	"errors"
+	"iter"
 )
 
 var ErrTypeNotFound = errors.New("type not found")
 
 type TypeClient interface {
-	List(ctx context.Context) ([]Type, error)
+	List(ctx context.Context, opts ...ListOption) (*Page[Type], error)
+	All(ctx context.Context, opts ...ListOption) iter.Seq2[Type, error]
 	Get(ctx context.Context, typeKey string) (*Type, error)
 	GetKeyByName(ctx context.Context, name string) (string, error)
 	Create(ctx context.Context, request CreateTypeRequest) (*TypeResponse, error)
