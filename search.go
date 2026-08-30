@@ -51,10 +51,9 @@ const (
 	FilterOperatorOr  FilterOperator = "or"
 )
 
-// FilterFormat determines which JSON field name is used when serializing filter values.
-// The API expects format-specific field names (e.g. "text", "number", "checkbox")
-// rather than generic "value" fields.
-type FilterFormat string
+// FilterFormat is PropertyFormat under its historical name; the constants
+// below are kept so existing callers compile unchanged.
+type FilterFormat = PropertyFormat
 
 const (
 	FilterFormatText        FilterFormat = "text"

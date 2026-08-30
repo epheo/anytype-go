@@ -49,6 +49,9 @@ var enumMappings = []struct{ SDKType, SpecSchema string }{
 	{"FilterCondition", "FilterCondition"},
 	{"FilterOperator", "FilterOperator"},
 	{"FilterFormat", "PropertyFormat"},
+	{"PropertyFormat", "PropertyFormat"},
+	{"TypeLayout", "TypeLayout"},
+	{"Color", "Color"},
 	{"SortDirection", "SortDirection"},
 	{"SortProperty", "SortProperty"},
 }

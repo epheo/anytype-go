@@ -51,6 +51,7 @@ The SDK uses a fluent interface that mirrors the resource hierarchy:
 // Spaces
 spaces, _ := client.Spaces().List(ctx)
 space, _ := client.Space(spaceID).Get(ctx)
+work, _ := client.Spaces().GetByName(ctx, "Work") // exact match, ErrSpaceNotFound otherwise
 
 // Objects
 objects, _ := client.Space(spaceID).Objects().List(ctx) // objects.Data, objects.Pagination
@@ -59,7 +60,8 @@ markdown, _ := client.Space(spaceID).Object(objectID).Get(ctx, anytype.WithForma
 
 // Types and templates
 types, _ := client.Space(spaceID).Types().List(ctx)
-templates, _ := client.Space(spaceID).Type(typeKey).Templates().List(ctx)
+task, _ := client.Space(spaceID).Types().Get(ctx, "task") // by key; Type(id) takes an ID
+templates, _ := client.Space(spaceID).Type(task.ID).Templates().List(ctx)
 
 // Lists and views
 views, _ := client.Space(spaceID).List(listID).Views().List(ctx)
@@ -107,7 +109,39 @@ for obj, err := range client.Space(spaceID).Objects().All(ctx) {
 }
 ```
 
-`All` is available on every list, and on `Search` (`client.Search().All(ctx, req)`).
+`All` is available on every list, and on `Search` (`client.Search().All(ctx, req)`,
+`client.Space(spaceID).SearchAll(ctx, req)`).
+
+### Errors
+
+Non-2xx responses come back as `*anytype.APIError` carrying the server's
+`Status`, `Code` and `Message`. Any 404, and the by-key/by-name lookups that
+scan a list, match `anytype.ErrNotFound`:
+
+```go
+_, err := client.Space(spaceID).Types().Get(ctx, "nope")
+if errors.Is(err, anytype.ErrNotFound) { /* no such type */ }
+
+var apiErr *anytype.APIError
+if errors.As(err, &apiErr) && apiErr.Status == 429 { /* back off */ }
+```
+
+### Property values
+
+Property formats, tag colors and creatable type layouts are typed constants
+(`anytype.PropertyFormatText`, `anytype.ColorRed`, `anytype.TypeLayoutNote`).
+When the format is only known at runtime, `NewPropertyLinkValue` picks the
+right typed value and rejects a mismatched Go type before the request is sent:
+
+```go
+v, err := anytype.NewPropertyLinkValue(prop.Key, prop.Format, 42)
+obj, _ := client.Space(spaceID).Objects().Create(ctx, anytype.CreateObjectRequest{
+    TypeKey:    "task",
+    Name:       "Pay invoice",
+    Icon:       anytype.EmojiIcon("💸"),
+    Properties: []anytype.PropertyLinkValue{v},
+})
+```
 
 See [examples/usage_examples.go](./examples/usage_examples.go) for complete working examples and [GoDoc](https://godoc.org/github.com/epheo/anytype-go) for the full API reference.
 

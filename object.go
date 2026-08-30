@@ -2,6 +2,7 @@ package anytype
 
 import (
 	"context"
+	"fmt"
 	"iter"
 )
 
@@ -126,6 +127,117 @@ func (EmailPropertyLinkValue) propertyLinkValue()       {}
 func (PhonePropertyLinkValue) propertyLinkValue()       {}
 func (ObjectsPropertyLinkValue) propertyLinkValue()     {}
 
+// NewPropertyLinkValue builds the typed value for a property whose format is only
+// known at runtime (from Property.Format). A nil value clears select and date;
+// number accepts any Go integer or float.
+func NewPropertyLinkValue(key string, format PropertyFormat, value any) (PropertyLinkValue, error) {
+	mismatch := func(want string) error {
+		return fmt.Errorf("property %q: format %s expects %s, got %T", key, format, want, value)
+	}
+	str := func() (string, bool) { s, ok := value.(string); return s, ok }
+	strs := func() ([]string, bool) { s, ok := value.([]string); return s, ok }
+	optStr := func() (*string, bool) {
+		switch v := value.(type) {
+		case nil:
+			return nil, true
+		case string:
+			return &v, true
+		case *string:
+			return v, true
+		}
+		return nil, false
+	}
+
+	switch format {
+	case PropertyFormatText:
+		if v, ok := str(); ok {
+			return TextPropertyLinkValue{Key: key, Text: v}, nil
+		}
+		return nil, mismatch("string")
+	case PropertyFormatURL:
+		if v, ok := str(); ok {
+			return URLPropertyLinkValue{Key: key, URL: v}, nil
+		}
+		return nil, mismatch("string")
+	case PropertyFormatEmail:
+		if v, ok := str(); ok {
+			return EmailPropertyLinkValue{Key: key, Email: v}, nil
+		}
+		return nil, mismatch("string")
+	case PropertyFormatPhone:
+		if v, ok := str(); ok {
+			return PhonePropertyLinkValue{Key: key, Phone: v}, nil
+		}
+		return nil, mismatch("string")
+	case PropertyFormatNumber:
+		if v, ok := toFloat(value); ok {
+			return NumberPropertyLinkValue{Key: key, Number: v}, nil
+		}
+		return nil, mismatch("number")
+	case PropertyFormatCheckbox:
+		if v, ok := value.(bool); ok {
+			return CheckboxPropertyLinkValue{Key: key, Checkbox: v}, nil
+		}
+		return nil, mismatch("bool")
+	case PropertyFormatSelect:
+		if v, ok := optStr(); ok {
+			return SelectPropertyLinkValue{Key: key, Select: v}, nil
+		}
+		return nil, mismatch("string or nil")
+	case PropertyFormatDate:
+		if v, ok := optStr(); ok {
+			return DatePropertyLinkValue{Key: key, Date: v}, nil
+		}
+		return nil, mismatch("string or nil")
+	case PropertyFormatMultiSelect:
+		if v, ok := strs(); ok {
+			return MultiSelectPropertyLinkValue{Key: key, MultiSelect: v}, nil
+		}
+		return nil, mismatch("[]string")
+	case PropertyFormatFiles:
+		if v, ok := strs(); ok {
+			return FilesPropertyLinkValue{Key: key, Files: v}, nil
+		}
+		return nil, mismatch("[]string")
+	case PropertyFormatObjects:
+		if v, ok := strs(); ok {
+			return ObjectsPropertyLinkValue{Key: key, Objects: v}, nil
+		}
+		return nil, mismatch("[]string")
+	}
+	return nil, fmt.Errorf("property %q: unknown format %q", key, format)
+}
+
+func toFloat(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case float32:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	case int8:
+		return float64(n), true
+	case int16:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case uint:
+		return float64(n), true
+	case uint8:
+		return float64(n), true
+	case uint16:
+		return float64(n), true
+	case uint32:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	}
+	return 0, false
+}
+
 type IconFormat string
 
 const (
@@ -139,5 +251,17 @@ type Icon struct {
 	Emoji  string     `json:"emoji,omitempty"`
 	File   string     `json:"file,omitempty"`
 	Name   string     `json:"name,omitempty"`
-	Color  string     `json:"color,omitempty"`
+	Color  Color      `json:"color,omitempty"`
+}
+
+func EmojiIcon(emoji string) *Icon {
+	return &Icon{Format: IconFormatEmoji, Emoji: emoji}
+}
+
+func FileIcon(fileID string) *Icon {
+	return &Icon{Format: IconFormatFile, File: fileID}
+}
+
+func NamedIcon(name string, color Color) *Icon {
+	return &Icon{Format: IconFormatIcon, Name: name, Color: color}
 }

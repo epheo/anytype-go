@@ -108,9 +108,7 @@ func (c *ClientImpl) doRequest(req *http.Request, result interface{}) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		// Read body for error details to provide actionable error messages
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+		return newAPIError(resp)
 	}
 
 	if result != nil {
@@ -120,4 +118,17 @@ func (c *ClientImpl) doRequest(req *http.Request, result interface{}) error {
 	}
 
 	return nil
+}
+
+// newAPIError decodes the documented error body; anything else (proxy HTML,
+// empty body) is kept verbatim so no diagnostic is lost.
+func newAPIError(resp *http.Response) error {
+	body, _ := io.ReadAll(resp.Body)
+	apiErr := &anytype.APIError{}
+	if err := json.Unmarshal(body, apiErr); err != nil || apiErr.Message == "" {
+		apiErr.Code = ""
+		apiErr.Message = string(body)
+	}
+	apiErr.Status = resp.StatusCode
+	return apiErr
 }

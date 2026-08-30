@@ -2,12 +2,18 @@ package anytype
 
 import (
 	"context"
+	"fmt"
 	"iter"
 )
+
+var ErrSpaceNotFound = fmt.Errorf("space %w", ErrNotFound)
 
 type SpaceClient interface {
 	List(ctx context.Context, opts ...ListOption) (*Page[Space], error)
 	All(ctx context.Context, opts ...ListOption) iter.Seq2[Space, error]
+	// GetByName returns the first space with that exact name, or ErrSpaceNotFound.
+	// Names are not unique; disambiguation is the caller's job.
+	GetByName(ctx context.Context, name string) (*Space, error)
 	Create(ctx context.Context, request CreateSpaceRequest) (*SpaceResponse, error)
 }
 
@@ -19,6 +25,7 @@ type SpaceContext interface {
 	Types() TypeClient
 	Type(typeID string) TypeContext
 	Search(ctx context.Context, request SearchRequest, opts ...ListOption) (*Page[Object], error)
+	SearchAll(ctx context.Context, request SearchRequest, opts ...ListOption) iter.Seq2[Object, error]
 	List(listID string) ListContext
 	Members() MemberClient
 	Member(memberID string) MemberContext

@@ -45,6 +45,19 @@ func (sc *SpaceClientImpl) All(ctx context.Context, opts ...anytype.ListOption) 
 	return paginate(ctx, sc.List, opts...)
 }
 
+func (sc *SpaceClientImpl) GetByName(ctx context.Context, name string) (*anytype.Space, error) {
+	for s, err := range sc.All(ctx) {
+		if err != nil {
+			return nil, err
+		}
+		if s.Name == name {
+			return &s, nil
+		}
+	}
+
+	return nil, anytype.ErrSpaceNotFound
+}
+
 type SpaceContextImpl struct {
 	client  *ClientImpl
 	spaceID string
@@ -135,6 +148,12 @@ func (sc *SpaceContextImpl) Search(ctx context.Context, request anytype.SearchRe
 	}
 
 	return response, nil
+}
+
+func (sc *SpaceContextImpl) SearchAll(ctx context.Context, request anytype.SearchRequest, opts ...anytype.ListOption) iter.Seq2[anytype.Object, error] {
+	return paginate(ctx, func(ctx context.Context, o ...anytype.ListOption) (*anytype.Page[anytype.Object], error) {
+		return sc.Search(ctx, request, o...)
+	}, opts...)
 }
 
 func (sc *SpaceContextImpl) Properties() anytype.SpacePropertyClient {

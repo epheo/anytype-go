@@ -2,11 +2,22 @@ package anytype
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"iter"
 )
 
-var ErrTypeNotFound = errors.New("type not found")
+var ErrTypeNotFound = fmt.Errorf("type %w", ErrNotFound)
+
+// TypeLayout is the set of layouts a type can be created with. Object and Type
+// responses may carry other layouts (set, collection, ...) that cannot be created.
+type TypeLayout string
+
+const (
+	TypeLayoutBasic   TypeLayout = "basic"
+	TypeLayoutProfile TypeLayout = "profile"
+	TypeLayoutAction  TypeLayout = "action"
+	TypeLayoutNote    TypeLayout = "note"
+)
 
 type TypeClient interface {
 	List(ctx context.Context, opts ...ListOption) (*Page[Type], error)
@@ -38,16 +49,16 @@ type Type struct {
 }
 
 type PropertyDefinition struct {
-	Key    string `json:"key"`
-	Name   string `json:"name"`
-	Format string `json:"format"`
+	Key    string         `json:"key"`
+	Name   string         `json:"name"`
+	Format PropertyFormat `json:"format"`
 }
 
 type CreateTypeRequest struct {
 	Key        string               `json:"key,omitempty"`
 	Name       string               `json:"name"`
 	Icon       *Icon                `json:"icon,omitempty"`
-	Layout     string               `json:"layout"`
+	Layout     TypeLayout           `json:"layout"`
 	PluralName string               `json:"plural_name"`
 	Properties []PropertyDefinition `json:"properties,omitempty"`
 }
@@ -56,7 +67,7 @@ type UpdateTypeRequest struct {
 	Key        string               `json:"key,omitempty"`
 	Name       string               `json:"name,omitempty"`
 	Icon       *Icon                `json:"icon,omitempty"`
-	Layout     string               `json:"layout,omitempty"`
+	Layout     TypeLayout           `json:"layout,omitempty"`
 	PluralName string               `json:"plural_name,omitempty"`
 	Properties []PropertyDefinition `json:"properties,omitempty"`
 }
