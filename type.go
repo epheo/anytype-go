@@ -11,6 +11,7 @@ var ErrTypeNotFound = errors.New("type not found")
 type TypeClient interface {
 	List(ctx context.Context, opts ...ListOption) (*Page[Type], error)
 	All(ctx context.Context, opts ...ListOption) iter.Seq2[Type, error]
+	// Get finds a type by key; returns ErrTypeNotFound when no type matches.
 	Get(ctx context.Context, typeKey string) (*Type, error)
 	GetKeyByName(ctx context.Context, name string) (string, error)
 	Create(ctx context.Context, request CreateTypeRequest) (*TypeResponse, error)

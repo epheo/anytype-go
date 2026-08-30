@@ -34,20 +34,19 @@ func (tc *TypeClientImpl) All(ctx context.Context, opts ...anytype.ListOption) i
 	return paginate(ctx, tc.List, opts...)
 }
 
+// Get looks up a type by key. The API only serves GET /types/{id}, so the
+// key is matched while walking the list; use Type(id).Get for an ID.
 func (tc *TypeClientImpl) Get(ctx context.Context, typeKey string) (*anytype.Type, error) {
-	req, err := tc.client.newRequest(ctx, http.MethodGet, fmt.Sprintf("/spaces/%s/types/%s", tc.spaceID, typeKey), nil)
-	if err != nil {
-		return nil, err
+	for t, err := range tc.All(ctx) {
+		if err != nil {
+			return nil, err
+		}
+		if t.Key == typeKey {
+			return &t, nil
+		}
 	}
 
-	var response struct {
-		Type anytype.Type `json:"type"`
-	}
-	if err := tc.client.doRequest(req, &response); err != nil {
-		return nil, err
-	}
-
-	return &response.Type, nil
+	return nil, anytype.ErrTypeNotFound
 }
 
 // GetKeyByName looks up a type key by its name.
